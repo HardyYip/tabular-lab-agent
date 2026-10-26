@@ -1,0 +1,200 @@
+[
+  {
+    "trial": 0,
+    "spec": {
+      "hypothesis": "Majority-class reference.",
+      "model": "dummy",
+      "params": {},
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ff5caf15182ec20009bcac73d0bd118e2ae5dfdfb9f837cee8159012b3ca3913",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.3888888888888889,
+      "macro_f1": 0.18666666666666668
+    },
+    "seconds": 4.188000000023749
+  },
+  {
+    "trial": 1,
+    "spec": {
+      "hypothesis": "Linear baseline with training-only preprocessing.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "7e194c7b738d9b085893c5be22c4c75291161a007dd75a3d3579b3d82d04681b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0
+    },
+    "seconds": 4.0310000000172295
+  },
+  {
+    "trial": 2,
+    "spec": {
+      "hypothesis": "Baseline logistic regression with scaled, median-imputed features achieved perfect macro F1 (1.0), so the classes are linearly separable with this preprocessing. Rather than adding complexity or changing preprocessing that could only hurt, the most informative next step is to probe regularization strength at the low end (C=0.1) to test whether the learned boundary is stable and whether stronger shrinkage preserves performance, which would indicate robustness to noise/overfitting on this small 106-row dataset.",
+      "model": "logistic",
+      "params": {
+        "C": 0.1,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "c617513c694f5d1d745cdddd595f313599c2c9ae77cfc55e835f4beee6086ed7",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0
+    },
+    "seconds": 4.23499999998603
+  },
+  {
+    "trial": 3,
+    "spec": {
+      "hypothesis": "The scaled, median-imputed logistic regression already reaches macro F1 1.0 at both C=1.0 and C=0.1, so the classes are linearly separable and the ceiling has been hit on the training metric. Before concluding separability generalizes, probe the upper end of regularization (C=10.0): if performance stays at 1.0, the linear boundary is robust across the shrinkage range rather than an artifact of a specific C, supporting that the simple linear model is sufficient and nonlinear alternatives are unnecessary on this small 106-row dataset.",
+      "model": "logistic",
+      "params": {
+        "C": 10.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "9accccfdd7b0f0053648ad74654f2c0c75cb66b0918dab9a8d893c0b7fa8624b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0
+    },
+    "seconds": 5.3439999999827705
+  },
+  {
+    "trial": 4,
+    "spec": {
+      "hypothesis": "Logistic regression with scaled, median-imputed features already achieves macro F1 1.0 at C=0.1, C=1.0, and C=10.0, so the linear boundary is robust across all regularization strengths and the metric ceiling has been hit. Since the data has no missing values, the only untested dimension that could still affect a linear model is imputation choice (most_frequent vs median); this is effectively redundant here, but the most informative remaining untested probe is whether dropping feature scaling preserves the perfect score. If unscaled performance degrades, it confirms scaling is essential to the linear separation; if it stays at 1.0, the ceiling is fully model-robust and no further experiments are warranted.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": false,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "03474c18694f79d876e3da297f04a41477fef184a49b5c605157bacd16cc232d",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.9444444444444444,
+      "macro_f1": 0.9487179487179488
+    },
+    "seconds": 5.782000000006519
+  },
+  {
+    "trial": 5,
+    "spec": {
+      "hypothesis": "Logistic regression with scaled, median-imputed features hits macro F1 1.0 at C=0.1, 1.0, and 10.0, so the classes are linearly separable and the metric ceiling is reached; dropping scaling degraded it to 0.949, confirming scaling is essential for the linear boundary. With no missing values, imputation choice is moot, so the remaining meaningful test is whether the perfect score survives class weighting (balanced) at the default C=1.0 given mild class imbalance (35/43/28). If balanced weighting keeps 1.0, the ceiling is robust to imbalance-aware weighting; if it drops, unweighted logistic is the confirmed best configuration, and the stopping criterion (repeated 1.0) is satisfied.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": "balanced",
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ba6d82ab648ee11457a2378d7dcea52185f88fef9ef2d4927d963497e90db821",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0
+    },
+    "seconds": 5.171999999962281
+  },
+  {
+    "trial": 6,
+    "spec": {
+      "hypothesis": "Logistic regression with scaled, median-imputed features reaches macro F1 1.0 across C in {0.1, 1.0, 10.0} and also under balanced class weighting at C=1.0, while unscaled features degrade to 0.949 — confirming a robust linear boundary and that scaling is essential. The metric ceiling has been hit repeatedly, so the only remaining informative probe is whether feature selection preserves the perfect separation. Reducing to select_percentile=75 tests whether the boundary survives discarding the weakest quarter of features; if macro F1 stays at 1.0 with balanced weighting at C=1.0, the linear signal is concentrated in a feature subset and the ceiling is confirmed robust, supporting stopping; if it drops, the full feature set is needed and the stopping decision is reinforced.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": "balanced",
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 75
+      }
+    },
+    "fingerprint": "bae4527aabea6ec74fdac60f4d2e0b4cdc63b7b47b51adedf44290932fd0fe3a",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.9722222222222222,
+      "macro_f1": 0.974320987654321
+    },
+    "seconds": 5.3439999999827705
+  },
+  {
+    "trial": 7,
+    "spec": {
+      "hypothesis": "Logistic regression with scaled, median-imputed features reaches macro F1 1.0 across C in {0.1, 1.0, 10.0} and under balanced weighting, while unscaled features degrade to 0.949 and select_percentile=75 degrades to 0.97443 — establishing a robust, scaled, full-feature linear boundary. Since the linear ceiling is confirmed, the remaining informative probe is whether a nonlinear model can match or exceed it: extra_trees with balanced weighting and capped depth (8) tests whether class-imbalance-aware nonlinear interactions add value beyond the linear solution on this small 106-row dataset. If it falls short of 1.0, the linear model is confirmed sufficient and experiments can stop.",
+      "model": "extra_trees",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 8,
+        "min_samples_leaf": 1,
+        "max_features": "sqrt",
+        "class_weight": "balanced"
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "d48c6f5065bb1043c6c7b22ceb037fd1eb9a3a420d5c699f20717aee8ea0efd2",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0
+    },
+    "seconds": 6.0310000000172295
+  }
+]

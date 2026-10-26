@@ -67,7 +67,7 @@ def docker_command(task, image_id: str, input_dir: Path, output_dir: Path, name:
             "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128",
             "--memory=" + task.docker.memory, "--memory-swap=" + task.docker.memory,
             "--cpus=" + str(task.docker.cpus), "--user=65534:65534",
-            "--tmpfs=/tmp:rw,noexec,nosuid,size=256m", "--ulimit=nofile=256:256",
+            "--tmpfs=/tmp:rw,noexec,nosuid,size=256m", "--workdir=/tmp", "--ulimit=nofile=256:256",
             "--env=OMP_NUM_THREADS=" + str(task.docker.cpus), "--env=OPENBLAS_NUM_THREADS=1",
             "--env=PYTHONDONTWRITEBYTECODE=1", "--env=PYTHONHASHSEED=" + str(task.seed),
             "--mount", f"type=bind,source={input_dir.resolve()},target=/input,readonly",
@@ -141,6 +141,7 @@ def evaluate_code(task, dataset, code, folder, timeout):
     started = time.monotonic()
     folder.mkdir(parents=True, exist_ok=True)
     try:
+        (folder / "candidate.py").write_text(code, encoding="utf-8")
         validate_code(code)
         image = preflight(task.docker.image)
         write_json(folder / "image.json", image)
@@ -155,7 +156,10 @@ def evaluate_code(task, dataset, code, folder, timeout):
             result["metrics"] = metrics
         return result
     except (ValueError, SyntaxError, OSError, RuntimeError) as exc:
-        return {"status": "failed", "safe_error": {"error_type": type(exc).__name__},
+        error = {"error_type": type(exc).__name__}
+        if isinstance(exc, SyntaxError):
+            error.update(line=exc.lineno, offset=exc.offset)
+        return {"status": "failed", "safe_error": error,
                 "seconds": time.monotonic() - started}
 
 

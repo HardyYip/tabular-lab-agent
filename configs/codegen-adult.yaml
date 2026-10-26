@@ -1,0 +1,16 @@
+data_path: ../data/adult-train.csv
+validation_path: ../data/adult-validation.csv
+test_path: ../data/adult-test.csv
+target: income
+strategy: codegen
+seed: 42
+device: cpu
+llm:
+  provider: deepseek
+  max_output_tokens: 4096
+limits:
+  budget_cny: 1
+  max_trials: 5
+  max_seconds: 600
+  trial_seconds: 120
+  final_seconds: 120

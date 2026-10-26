@@ -1,0 +1,23 @@
+data_path: ../data/demo.csv
+target: target
+strategy: codegen
+seed: 42
+device: cpu
+run_dir: ../runs
+llm:
+  provider: deepseek
+  model: deepseek-flash
+  max_output_tokens: 4096
+  timeout_seconds: 60
+limits:
+  budget_cny: 1
+  max_trials: 5
+  max_seconds: 300
+  trial_seconds: 60
+  final_seconds: 60
+  max_workers: 4
+docker:
+  image: tabular-lab-worker:0.1.0
+  memory: 8g
+  cpus: 4
+  max_repairs: 2

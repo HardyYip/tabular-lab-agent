@@ -1,0 +1,204 @@
+[
+  {
+    "trial": 0,
+    "spec": {
+      "hypothesis": "Majority-class reference.",
+      "model": "dummy",
+      "params": {},
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ff5caf15182ec20009bcac73d0bd118e2ae5dfdfb9f837cee8159012b3ca3913",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.3888888888888889,
+      "macro_f1": 0.18666666666666668
+    },
+    "seconds": 5.48499999998603
+  },
+  {
+    "trial": 1,
+    "spec": {
+      "hypothesis": "Linear baseline with training-only preprocessing.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "7e194c7b738d9b085893c5be22c4c75291161a007dd75a3d3579b3d82d04681b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0
+    },
+    "seconds": 5.438000000023749
+  },
+  {
+    "trial": 2,
+    "spec": {
+      "hypothesis": "The scaled logistic baseline already reached perfect macro F1 with C=1.0. To probe robustness, test lighter regularization (C=0.1): if the separation is genuine rather than overfit, stronger regularization should sustain high macro F1 while verifying the linear model is not sensitive to the penalty strength.",
+      "model": "logistic",
+      "params": {
+        "C": 0.1,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "c617513c694f5d1d745cdddd595f313599c2c9ae77cfc55e835f4beee6086ed7",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0
+    },
+    "seconds": 5.1560000000172295
+  },
+  {
+    "trial": 3,
+    "spec": {
+      "hypothesis": "The scaled logistic baseline achieved perfect macro F1 at both C=1.0 and C=0.1, showing the classes are highly separable with a linear decision boundary and insensitive to regularization strength. Since lighter regularization didn't degrade performance, the remaining question is whether this is genuinely linear or whether non-linear structure exists. A shallow boosted tree ensemble (hist_gradient_boosting with a low learning rate) is the natural next probe: on 106 rows with 13 clean numeric features, if the perfect separation is truly linear we expect comparable perfect or near-perfect macro F1; any drop would be regularization-driven and suggest the linear boundary is the right inductive bias.",
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.03,
+        "max_iter": 150,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 0.0,
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "51e6c90458e60c65715f91d31c407348ad820046186237f174f808bd4124110e",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.9722222222222222,
+      "macro_f1": 0.974320987654321
+    },
+    "seconds": 5.796999999962281
+  },
+  {
+    "trial": 4,
+    "spec": {
+      "hypothesis": "Scaled logistic regression reached perfect macro F1 at both C=1.0 and C=0.1, showing a highly separable, regularization-insensitive linear signal, while hist_gradient_boosting matched but did not exceed it (0.974). Testing whether the perfect linear separation depends on feature scaling is the next diagnostic: if scaling is essential, an unscaled logistic with C=1.0 should degrade, confirming the linear boundary operates in the scaled space; if it remains perfect, the signal is scale-invariant and the linear baseline is robust.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": false,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "03474c18694f79d876e3da297f04a41477fef184a49b5c605157bacd16cc232d",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.9444444444444444,
+      "macro_f1": 0.9474747474747475
+    },
+    "seconds": 5.344000000040978
+  },
+  {
+    "trial": 5,
+    "spec": {
+      "hypothesis": "Scaled logistic regression reached perfect macro F1 at both C=1.0 and C=0.1, and remained strong (0.947) even unscaled, showing a highly separable, regularization-insensitive linear signal. Dropping scaling cost a small amount, so scaling is modestly helpful but not essential. The one untested direction that could improve on the perfect linear baseline is whether non-linear feature interactions exist: extra_trees probes this with a different inductive bias than the already-tested hist_gradient_boosting. If the separation is genuinely linear, extra_trees should match or fall below the logistic result; if it exceeds perfect on held-out folds or reveals complementary structure, interactions matter. This is a new model not yet attempted.",
+      "model": "extra_trees",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 8,
+        "min_samples_leaf": 1,
+        "max_features": "sqrt",
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "5fe1657162186416552a42940c575b71ffc1547aa21e70de4ef4776e2a7c7a62",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0
+    },
+    "seconds": 4.453000000037719
+  },
+  {
+    "trial": 6,
+    "spec": {
+      "hypothesis": "Across trials, macro F1 is at or near perfect for both the linear model (logistic C=1.0 and C=0.1, scaled) and extra_trees, while a moderate hist_gradient_boosting (0.974) and unscaled logistic (0.947) fall slightly short. This indicates a highly separable signal where the linear boundary is the right inductive bias and scaling matters modestly. Since most expressive models already saturate near ceiling, the remaining question worth testing is whether a more strongly regularized linear boundary (C=10.0) can sustain perfect macro F1 — distinguishing a genuinely linear, low-variance separation from one that depends on penalty strength. This new untested C value for the scaled logistic directly probes regularization sensitivity at the loose end.",
+      "model": "logistic",
+      "params": {
+        "C": 10.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "9accccfdd7b0f0053648ad74654f2c0c75cb66b0918dab9a8d893c0b7fa8624b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0
+    },
+    "seconds": 4.046999999962281
+  },
+  {
+    "trial": 7,
+    "spec": {
+      "hypothesis": "Scaled logistic regression saturates at perfect macro F1 across C in {0.1, 1, 10}, extra_trees also reaches 1.0, and unscaled logistic drops to 0.947, indicating a highly separable, near-linear signal where feature scaling is modestly helpful. A different model family not yet attempted is CatBoost; a shallow depth-4 boosted model with mild L2 provides a strong regularizer on only 106 rows and probes whether gradient-boosted interactions can sustain the ceiling without overfitting, complementing the earlier hist_gradient_boosting probe with a distinct implementation.",
+      "model": "catboost",
+      "params": {
+        "iterations": 200,
+        "depth": 4,
+        "learning_rate": 0.1,
+        "l2_leaf_reg": 3.0,
+        "auto_class_weights": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ac7af913641fdb6efa6a7e0c0a52f7e84020ed967c41d3a91aa788e854a29551",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.9722222222222222,
+      "macro_f1": 0.9740129935032483
+    },
+    "seconds": 14.061999999976251
+  }
+]

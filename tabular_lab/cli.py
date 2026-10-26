@@ -9,6 +9,52 @@ import typer
 from .config import load_task
 
 app = typer.Typer(no_args_is_help=True, help="Reproducible, budget-aware tabular classification experiments.")
+auth = typer.Typer(no_args_is_help=True, help="Manage local DeepSeek credentials without making API calls.")
+app.add_typer(auth, name="auth")
+
+
+@auth.command("login")
+def auth_login():
+    """Save a key in Windows Credential Manager for future processes."""
+    from .credentials import CredentialError, WindowsCredentialStore
+    try:
+        store = WindowsCredentialStore()
+        key = typer.prompt("DeepSeek API key (hidden input)", hide_input=True)
+        store.write(key)
+        typer.echo("Saved in Windows Credential Manager for this user. No API request was made.")
+    except CredentialError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+
+
+@auth.command("status")
+def auth_status():
+    """Check local key availability; never print the key or call the API."""
+    from .credentials import CredentialError, get_api_key
+    try:
+        if not get_api_key():
+            typer.echo("No DeepSeek key configured.")
+            raise typer.Exit(1)
+        typer.echo("DeepSeek key is configured locally (value hidden; not API-verified).")
+    except CredentialError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+
+
+@auth.command("logout")
+def auth_logout():
+    """Remove the saved Windows credential; leave environment overrides unchanged."""
+    import os
+
+    from .credentials import CredentialError, delete_api_key
+    try:
+        removed = delete_api_key()
+        typer.echo("Saved credential removed." if removed else "No saved credential to remove.")
+        if os.environ.get("DEEPSEEK_API_KEY", "").strip():
+            typer.echo("DEEPSEEK_API_KEY is still set in this process and remains an active override.")
+    except CredentialError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
 
 
 @app.command()

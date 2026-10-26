@@ -1,0 +1,218 @@
+[
+  {
+    "trial": 0,
+    "spec": {
+      "hypothesis": "Majority-class reference.",
+      "model": "dummy",
+      "params": {},
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ff5caf15182ec20009bcac73d0bd118e2ae5dfdfb9f837cee8159012b3ca3913",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.7589972316210397,
+      "macro_f1": 0.4314942729736819,
+      "roc_auc": 0.5
+    },
+    "seconds": 7.047000000020489
+  },
+  {
+    "trial": 1,
+    "spec": {
+      "hypothesis": "Linear baseline with training-only preprocessing.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "7e194c7b738d9b085893c5be22c4c75291161a007dd75a3d3579b3d82d04681b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8500461396493386,
+      "macro_f1": 0.7804373713745776,
+      "roc_auc": 0.9044990104284866
+    },
+    "seconds": 4.9689999999827705
+  },
+  {
+    "trial": 2,
+    "spec": {
+      "hypothesis": "The linear baseline achieved macro_f1 0.780 with roc_auc 0.904, indicating strong signal but likely underfitting nonlinear/interaction structure across the 6 categorical features and skewed numeric columns. Gradient boosted trees handle mixed categorical/numeric data and interactions well, so a hist_gradient_boosting model with moderate learning rate should improve macro_f1 over the linear baseline.",
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.1,
+        "max_iter": 150,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 0.0,
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "9cba613fd52b35c6835e2d2a8a86ea9202d7ae2e5e3164af77e8f29472459686",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.869424792371578,
+      "macro_f1": 0.8107211187845934,
+      "roc_auc": 0.9234548815520722
+    },
+    "seconds": 5.235000000044238
+  },
+  {
+    "trial": 3,
+    "spec": {
+      "hypothesis": "The linear baseline reached macro_f1 0.780 and the gradient-boosted trees improved to 0.811 with roc_auc 0.923, confirming nonlinear interactions matter across the mixed categorical/numeric features. CatBoost's native categorical handling and ordered boosting are well suited to the 7 categorical columns (some with up to 41 categories) and skewed numeric columns, so it should capture these interactions more effectively than histogram gradient boosting at a moderate depth, yielding higher macro_f1.",
+      "model": "catboost",
+      "params": {
+        "iterations": 200,
+        "depth": 6,
+        "learning_rate": 0.1,
+        "l2_leaf_reg": 3.0,
+        "auto_class_weights": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "dbcf20fef6b8f0565ba01bd867986f3dfe3d21affcc0fe8eca76e15750796d72",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8681944017225469,
+      "macro_f1": 0.8086522468847519,
+      "roc_auc": 0.9237210733795886
+    },
+    "seconds": 23.5
+  },
+  {
+    "trial": 4,
+    "spec": {
+      "hypothesis": "History shows nonlinear trees beat the linear baseline (logistic macro_f1 0.780 vs hist_gradient_boosting 0.811, roc_auc 0.904 vs 0.923), and CatBoost at depth 6 matched but did not exceed hist_gradient_boosting at lr=0.1 (0.8087 vs 0.8107), suggesting the latter's lr=0.1/150-iter setting was near-optimal on the boosting side but not yet tuned. Since the current best remains the default-ish hist_gradient_boosting, the promising untried direction is a smoother, more conservative boosting schedule: lowering learning_rate to 0.03 with the same 31 leaves and 150 iterations regularizes each step and often improves macro_f1 for imbalanced binary data (class ratio ~3:1) by reducing overfitting to the majority class, while preserving the interaction modeling that clearly outperforms linear models.",
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.03,
+        "max_iter": 150,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 0.0,
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "51e6c90458e60c65715f91d31c407348ad820046186237f174f808bd4124110e",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8691171947093203,
+      "macro_f1": 0.8083612338869389,
+      "roc_auc": 0.9215701373761904
+    },
+    "seconds": 5.35899999999674
+  },
+  {
+    "trial": 5,
+    "spec": {
+      "hypothesis": "History: logistic baseline macro_f1 0.780; hist_gradient_boosting lr=0.1/max_iter=150 reached 0.8107, the current best; lowering lr to 0.03 left it flat (0.8084) and CatBoost depth 6 matched but did not exceed it (0.8087), so boosting is near a plateau under scratch-built splits. The data has 7 categorical columns (one with 41 levels) and a class imbalance of roughly 3:1; native categorical handling was not yet shown to beat one-hot tree building, but CatBoost with a shallower depth (4) and strong ordered boosting may generalize better on these high-cardinality categoricals while the lower depth regularizes against the majority class and lifts macro_f1. This probe isolates depth effects for native categorical boosting, which the existing depth-6 run did not test.",
+      "model": "catboost",
+      "params": {
+        "iterations": 200,
+        "depth": 4,
+        "learning_rate": 0.1,
+        "l2_leaf_reg": 3.0,
+        "auto_class_weights": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ac7af913641fdb6efa6a7e0c0a52f7e84020ed967c41d3a91aa788e854a29551",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8692709935404491,
+      "macro_f1": 0.8087318792429428,
+      "roc_auc": 0.9232653726265317
+    },
+    "seconds": 19.71899999998277
+  },
+  {
+    "trial": 6,
+    "spec": {
+      "hypothesis": "Tried so far: logistic (macro_f1 0.780), hist_gradient_boosting at lr 0.1 and 0.03 (0.8107 best, 0.8084), and catboost at depth 4 and 6 (0.8087, 0.8087). Boosting has plateaued around 0.81 on this ~3:1 imbalanced binary task, and all tree runs used null class weighting, optimizing raw accuracy rather than macro_f1. Since the metric rewards minority-class recall, a balanced class_weight on the current best model is a principled, untried lever: hist_gradient_boosting with lr=0.1/150 iters and class_weight='balanced' should reweight leaf gradients to favor the minority class and raise macro_f1 without changing the interaction structure that already beat the linear baseline.",
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.1,
+        "max_iter": 150,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 0.0,
+        "class_weight": "balanced"
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "f08472441289d021d961cf5685bf0e2e7d720e081f94d26b92cd98d69ea6f52b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8334358658874192,
+      "macro_f1": 0.797181215140308,
+      "roc_auc": 0.9235351205751348
+    },
+    "seconds": 5.077999999979511
+  },
+  {
+    "trial": 7,
+    "spec": {
+      "hypothesis": "Boosting has plateaued near macro_f1 0.81 across hist_gradient_boosting (lr 0.1 and 0.03) and catboost (depth 4 and 6), while the linear logistic baseline reached 0.780 with roc_auc 0.904. Nonlinear trees clearly win, but no untried model family has been probed beyond boosting. A bagged, heavily randomized tree ensemble (extra_trees) with balanced class weighting is the principled next step on this ~3:1 imbalanced mixed categorical/numeric data: extra-random splits reduce variance and the 'balanced' weighting directly targets macro_f1 by favoring minority-class recall, testing whether a decorrelated ensemble can exceed the boosting plateau that explicit class weighting hurt for hist_gradient_boosting.",
+      "model": "extra_trees",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 8,
+        "min_samples_leaf": 1,
+        "max_features": "sqrt",
+        "class_weight": "balanced"
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "d48c6f5065bb1043c6c7b22ceb037fd1eb9a3a420d5c699f20717aee8ea0efd2",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.7313134420178407,
+      "macro_f1": 0.7014307491269165,
+      "roc_auc": 0.8771901988130314
+    },
+    "seconds": 4.98399999999674
+  }
+]

@@ -33,6 +33,11 @@ feature_schema)`; the fixed worker calls fit/predict. Validation labels stay on 
 by the same metric implementation as V1. Immutable image IDs are recorded with each candidate and
 prediction bundle. Generated pickle artifacts never enter host `joblib.load`.
 
+The executor sets the working directory to bounded writable `/tmp` scratch. The root and input mounts
+remain read-only. This supports libraries such as CatBoost that otherwise try to create training logs
+in the read-only image working directory. Syntax failures preserve source and return line/offset
+without forwarding source excerpts or arbitrary error messages.
+
 Each candidate can be repaired at most twice; repairs count toward the overall executed-trial limit.
 Repair context contains exception types and stack locations, avoiding arbitrary exception strings
 that could expose raw feature values. Container execution is isolated from the API client and caller
@@ -40,6 +45,11 @@ environment. The restriction is appropriate for a local learning tool; adversari
 would require stronger isolation and output/disk quotas.
 
 ## Cost and reproduction
+
+On Windows, `credentials.get_api_key()` checks an environment override and then the current user's
+Credential Manager store. Keys are resolved in the host HTTP client, never placed in task YAML,
+experiment logs or the generated-code container. Linux/CI use environment injection. The test suite
+blocks both saved-key reads and construction of the real Windows credential store.
 
 Reservations use conservative input-byte estimates plus a maximum completion allowance. Actual usage
 is saved per response at configured peak/cache-miss prices. Unknown usage stops all further calls.

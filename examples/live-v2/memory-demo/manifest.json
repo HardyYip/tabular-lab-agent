@@ -1,0 +1,27 @@
+{
+  "git_commit": "fc8d4f84ee7e110bfeafafd14b137df96122e6b0",
+  "git_dirty": true,
+  "package_source_sha256": "f315e77cf99768f0d129d9ca3fbe5a3cf6ff9e3a9147e1a9a0fe3422257a3e9a",
+  "versions": {
+    "tabular-lab-agent": "0.1.0",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3",
+    "scikit-learn": "1.9.1",
+    "catboost": "1.2.10",
+    "pydantic": "2.14.1"
+  },
+  "data_hashes": {
+    "data": "68860447be6282ce764bda00f8fb0679d778c8504c4a12bb75bbeee36bef9c77"
+  },
+  "seed": 42,
+  "split_source": "stratified 60/20/20",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "pricing": {
+    "input_usd_per_million": 0.3,
+    "output_usd_per_million": 1.2,
+    "usd_to_cny": 7.2,
+    "snapshot_date": "2026-10-26",
+    "source": "https://api-docs.deepseek.com/quick_start/pricing/"
+  }
+}

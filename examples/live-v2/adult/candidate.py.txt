@@ -1,0 +1,104 @@
+import numpy as np
+import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.pipeline import Pipeline
+from catboost import CatBoostClassifier
+
+
+class FeatureEngineer(BaseEstimator, TransformerMixin):
+    def __init__(self, feature_schema=None):
+        self.feature_schema = feature_schema or {}
+        self.cat_cols_ = []
+        self.num_cols_ = []
+
+    def fit(self, X, y=None):
+        self.cat_cols_ = [c for c in X.columns if X[c].dtype == object or str(self.feature_schema.get(c)) in ('object', 'category', 'string')]
+        self.num_cols_ = [c for c in X.columns if c not in self.cat_cols_]
+        return self
+
+    def transform(self, X):
+        df = X.copy()
+        for c in self.num_cols_:
+            if c in df.columns:
+                df[c] = pd.to_numeric(df[c], errors='coerce')
+        eng = pd.DataFrame(index=df.index)
+        if 'capital_gain' in df.columns and 'capital_loss' in df.columns:
+            eng['capital_net'] = df['capital_gain'].fillna(0) - df['capital_loss'].fillna(0)
+            eng['capital_has'] = ((df['capital_gain'].fillna(0) > 0) | (df['capital_loss'].fillna(0) > 0)).astype(int)
+        if 'hours_per_week' in df.columns:
+            h = df['hours_per_week'].fillna(df['hours_per_week'].median() if df['hours_per_week'].notna().any() else 40)
+            eng['hours_part'] = (h // 10).astype(int)
+            eng['over_40'] = (h > 40).astype(int)
+            eng['under_40'] = (h < 40).astype(int)
+        if 'fnlwgt' in df.columns:
+            eng['fnlwgt_log'] = np.log1p(df['fnlwgt'].fillna(0).clip(lower=0))
+        if 'age' in df.columns:
+            a = df['age'].fillna(38)
+            eng['age_bucket'] = (a // 5).astype(int)
+        for c in self.cat_cols_:
+            s = df[c].astype('object')
+            s = s.where(s.notna(), 'MISSING')
+            df[c] = s.astype(str)
+        out = pd.concat([df[self.num_cols_].reset_index(drop=True), eng.reset_index(drop=True), df[self.cat_cols_].reset_index(drop=True)], axis=1)
+        return out
+
+
+class CatWrap(BaseEstimator):
+    def __init__(self, cat_cols=None, **params):
+        self.cat_cols = cat_cols or []
+        self.params = params
+        self.model_ = None
+        self.cat_idx_ = []
+
+    def fit(self, X, y):
+        self.cat_idx_ = [X.columns.get_loc(c) for c in self.cat_cols if c in X.columns]
+        self.model_ = CatBoostClassifier(
+            loss_function='Logloss',
+            eval_metric='F1',
+            thread_count=4,
+            allow_writing_files=False,
+            verbose=False,
+            **self.params
+        )
+        self.model_.fit(X, y, cat_features=self.cat_idx_)
+        self.classes_ = self.model_.classes_
+        return self
+
+    def predict(self, X):
+        return self.model_.predict(X).ravel()
+
+    def predict_proba(self, X):
+        return self.model_.predict_proba(X)
+
+
+class FullPipeline(BaseEstimator):
+    def __init__(self, seed=0, feature_schema=None, params=None):
+        self.seed = seed
+        self.feature_schema = feature_schema or {}
+        self.params = params or {}
+
+    def fit(self, X, y):
+        self.fe_ = FeatureEngineer(self.feature_schema).fit(X, y)
+        Xt = self.fe_.transform(X)
+        self.model_ = CatWrap(cat_cols=self.fe_.cat_cols_, **self.params).fit(Xt, y)
+        self.classes_ = self.model_.classes_
+        return self
+
+    def predict(self, X):
+        return self.model_.predict(self.fe_.transform(X))
+
+    def predict_proba(self, X):
+        return self.model_.predict_proba(self.fe_.transform(X))
+
+
+def build_pipeline(seed: int, feature_schema: dict):
+    params = dict(
+        iterations=800,
+        learning_rate=0.05,
+        depth=6,
+        l2_leaf_reg=3.0,
+        random_seed=seed,
+        od_type='Iter',
+        od_wait=50,
+    )
+    return FullPipeline(seed=seed, feature_schema=feature_schema, params=params)

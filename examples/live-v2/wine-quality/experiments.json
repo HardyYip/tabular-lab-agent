@@ -1,0 +1,86 @@
+[
+  {
+    "trial": 0,
+    "spec": {
+      "hypothesis": "Majority-class reference.",
+      "model": "dummy",
+      "params": {},
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ff5caf15182ec20009bcac73d0bd118e2ae5dfdfb9f837cee8159012b3ca3913",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.43609022556390975,
+      "macro_f1": 0.20244328097731237
+    },
+    "seconds": 5.436999999976251
+  },
+  {
+    "trial": 1,
+    "spec": {
+      "hypothesis": "Linear baseline with training-only preprocessing.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "7e194c7b738d9b085893c5be22c4c75291161a007dd75a3d3579b3d82d04681b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.5742481203007519,
+      "macro_f1": 0.5472515556042574
+    },
+    "seconds": 5.2810000000172295
+  },
+  {
+    "trial": 2,
+    "spec": {
+      "model": "generated",
+      "hypothesis": "CatBoost multiclass handles numeric/categorical mix with missing values natively; minimal preprocessing and balanced class weights for macro-F1."
+    },
+    "fingerprint": "08d29048fc7eaf45a7b953da693b87c207a80daf8d0950145d299f8cd3d3c3b5",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.5827067669172933,
+      "macro_f1": 0.5827990251315431
+    },
+    "seconds": 5.577999999979511
+  },
+  {
+    "trial": 3,
+    "spec": {
+      "model": "generated",
+      "hypothesis": "CatBoost with native categorical handling, class weights, and ordinal-encoded categoricals inside a pipeline may be improved by adding feature engineering and tuned hyperparameters; ensemble CatBoost with a logistic regression on scaled features to boost macro-F1."
+    },
+    "fingerprint": "d6fde383e8ae1e2543fd2b5d3149676439cdcd5616d2708f5c32f97c9b8e72a0",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.5864661654135338,
+      "macro_f1": 0.5867353867353867
+    },
+    "seconds": 6.563000000023749
+  },
+  {
+    "trial": 4,
+    "spec": {
+      "model": "generated",
+      "hypothesis": "Improve over trial 3 by engineering wine-chemistry ratio/interaction features fitted inside the pipeline, using CatBoost with native categorical handling, balanced class weights, and an ensemble with logistic regression on scaled imputed features to raise macro-F1."
+    },
+    "fingerprint": "262e445782091aaf42bf79b717587d9bff4ffd7d01a07f44fce33f9e0d8f4afc",
+    "status": "failed",
+    "seconds": 4.077999999979511
+  }
+]

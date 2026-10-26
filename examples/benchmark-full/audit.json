@@ -1,0 +1,13 @@
+{
+  "audited_runs": 36,
+  "task_seed_pairs": 12,
+  "llm_calls": 74,
+  "estimated_cost_cny": 0.92692296,
+  "failed_trials": 0,
+  "data_hashes_and_splits_match": true,
+  "matched_splits_between_strategies": true,
+  "validation_based_winner_verified": true,
+  "test_metrics_independently_recomputed": true,
+  "candidate_registry_and_usage_ledger_verified": true,
+  "model_objects_loaded_on_host": false
+}

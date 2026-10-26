@@ -34,11 +34,15 @@ def run_benchmark(suite_path: Path):
                        "status": summary["status"], "run_path": summary["path"],
                        "seconds": summary["seconds"], "trials": summary["trials"],
                        "failed_trials": summary["failed_trials"], "cost_cny_estimate": summary["cost_cny_estimate"],
+                       "usage_unknown": summary.get("usage_unknown", False),
                        "llm_calls": summary["llm_calls"], "stop_reason": summary["stop_reason"],
                        "test_macro_f1": summary.get("test_metrics", {}).get("macro_f1"),
-                       "test_accuracy": summary.get("test_metrics", {}).get("accuracy")}
+                       "test_accuracy": summary.get("test_metrics", {}).get("accuracy"),
+                       "test_roc_auc": summary.get("test_metrics", {}).get("roc_auc")}
                 rows.append(row)
                 _save(output, rows)
+                if summary.get("usage_unknown"):
+                    raise RuntimeError("Benchmark stopped because API usage is unknown; inspect saved results.")
     return output / "results.csv"
 
 

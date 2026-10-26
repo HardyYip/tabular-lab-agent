@@ -17,3 +17,6 @@ htmlcov/
 *.pkl
 *.cbm
 .tools/
+/DSH_HANDOFF.md
+/DSH_RETURN.md
+/test-results/

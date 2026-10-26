@@ -1,0 +1,95 @@
+[
+  {
+    "trial": 0,
+    "spec": {
+      "hypothesis": "Majority-class reference.",
+      "model": "dummy",
+      "params": {},
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ff5caf15182ec20009bcac73d0bd118e2ae5dfdfb9f837cee8159012b3ca3913",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.7589972316210397,
+      "macro_f1": 0.4314942729736819,
+      "roc_auc": 0.5
+    },
+    "seconds": 5.98499999998603
+  },
+  {
+    "trial": 1,
+    "spec": {
+      "hypothesis": "Linear baseline with training-only preprocessing.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "7e194c7b738d9b085893c5be22c4c75291161a007dd75a3d3579b3d82d04681b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8500461396493386,
+      "macro_f1": 0.7804373713745776,
+      "roc_auc": 0.9044990104284866
+    },
+    "seconds": 5.64100000000326
+  },
+  {
+    "trial": 2,
+    "spec": {
+      "model": "generated",
+      "hypothesis": "CatBoost with native categorical handling typically outperforms a scaled linear baseline on this adult-style dataset for macro-F1, while still fitting preprocessing within the pipeline."
+    },
+    "fingerprint": "982f8e599f0cd7fef31ee446cf58cb0396eb05ebcc813d77aad959571e75643f",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8700399876960935,
+      "macro_f1": 0.8096158021043067,
+      "roc_auc": 0.9242358057426832
+    },
+    "seconds": 12.35899999999674
+  },
+  {
+    "trial": 3,
+    "spec": {
+      "model": "generated",
+      "hypothesis": "CatBoost with native categorical handling and ordered boosting plus moderate depth/iterations and internal early stopping should exceed the current macro-F1. Add frequency-based feature engineering inside the pipeline and pass categorical columns as strings with missing filled to a sentinel so CatBoost handles them natively. Use thread_count=4 and allow_writing_files=False."
+    },
+    "fingerprint": "33f47ad551be3562bf37ee6eeea78d00bc198a7a161880165617556850bbf177",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8692709935404491,
+      "macro_f1": 0.8067641464574418,
+      "roc_auc": 0.9232940802222123
+    },
+    "seconds": 8.34299999999348
+  },
+  {
+    "trial": 4,
+    "spec": {
+      "model": "generated",
+      "hypothesis": "A tuned CatBoost with native categorical handling, plus engineered features (capital net, hours buckets) and robust preprocessing inside the pipeline, should improve macro-F1 over prior trials. I'll add a feature-engineering transformer and pass categoricals as strings."
+    },
+    "fingerprint": "e2135bc0f545d3100180f990610683055e428e3677efb7d63fd81e427cf06b5f",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8717317748385113,
+      "macro_f1": 0.8127111661510814,
+      "roc_auc": 0.9255281001455422
+    },
+    "seconds": 10.063000000023749
+  }
+]

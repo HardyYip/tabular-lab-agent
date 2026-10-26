@@ -1,0 +1,218 @@
+[
+  {
+    "trial": 0,
+    "spec": {
+      "hypothesis": "Majority-class reference.",
+      "model": "dummy",
+      "params": {},
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ff5caf15182ec20009bcac73d0bd118e2ae5dfdfb9f837cee8159012b3ca3913",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.7589972316210397,
+      "macro_f1": 0.4314942729736819,
+      "roc_auc": 0.5
+    },
+    "seconds": 5.73399999999674
+  },
+  {
+    "trial": 1,
+    "spec": {
+      "hypothesis": "Linear baseline with training-only preprocessing.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "7e194c7b738d9b085893c5be22c4c75291161a007dd75a3d3579b3d82d04681b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8500461396493386,
+      "macro_f1": 0.7804373713745776,
+      "roc_auc": 0.9044990104284866
+    },
+    "seconds": 5.8439999999827705
+  },
+  {
+    "trial": 2,
+    "spec": {
+      "hypothesis": "The logistic baseline reached macro_f1 0.780 and ROC AUC 0.904, showing a strong linear signal. The remaining question is whether nonlinear interactions and native categorical handling improve on this. A gradient-boosted model captures nonlinearities and interactions across the 14 features (several categorical with meaningful cardinality, plus skewed numerics) while remaining robust on 26k rows; its boosting capacity should lift macro_f1 beyond the linear baseline, and this serves as the first nonlinear probe before tuning.",
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.1,
+        "max_iter": 150,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 0.0,
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "9cba613fd52b35c6835e2d2a8a86ea9202d7ae2e5e3164af77e8f29472459686",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8681944017225469,
+      "macro_f1": 0.8091270552864586,
+      "roc_auc": 0.9229521106871785
+    },
+    "seconds": 7.422000000020489
+  },
+  {
+    "trial": 3,
+    "spec": {
+      "hypothesis": "Histogram gradient boosting improved macro_f1 over the logistic baseline (0.809 vs 0.780) with strong ROC AUC 0.923, confirming nonlinear interactions add value. With 14 features (7 categorical with meaningful cardinality) and 26k rows, native categorical handling should further improve over one-hot/ordinal encoding. CatBoost with ordered boosting and categorical-aware splits is a natural next probe; depth 6 with 200 iterations is a middle-ground capacity setting to test this before tuning learning rate or depth.",
+      "model": "catboost",
+      "params": {
+        "iterations": 200,
+        "depth": 6,
+        "learning_rate": 0.1,
+        "l2_leaf_reg": 3.0,
+        "auto_class_weights": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "dbcf20fef6b8f0565ba01bd867986f3dfe3d21affcc0fe8eca76e15750796d72",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8692709935404491,
+      "macro_f1": 0.8087318792429428,
+      "roc_auc": 0.9234533944468906
+    },
+    "seconds": 31.78100000001723
+  },
+  {
+    "trial": 4,
+    "spec": {
+      "hypothesis": "History shows a strong linear signal (logistic macro_f1 0.780, ROC AUC 0.904) and that nonlinear boosting adds value (HGB 0.809/0.923; CatBoost depth 6 0.809/0.923, essentially tied). A shallower CatBoost (depth 4) was the untested capacity neighbor of the tied depth-6 run; with 7 categorical features and only 14 total features, lower tree depth should reduce overfitting on native ordered-boosting categorical splits and may edge macro_f1. Testing the smaller-depth CatBoost isolates capacity as the driver before changing learning rate or class weighting.",
+      "model": "catboost",
+      "params": {
+        "iterations": 200,
+        "depth": 4,
+        "learning_rate": 0.1,
+        "l2_leaf_reg": 3.0,
+        "auto_class_weights": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ac7af913641fdb6efa6a7e0c0a52f7e84020ed967c41d3a91aa788e854a29551",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8686557982159335,
+      "macro_f1": 0.8068510438175169,
+      "roc_auc": 0.9229234030914977
+    },
+    "seconds": 20.360000000044238
+  },
+  {
+    "trial": 5,
+    "spec": {
+      "hypothesis": "CatBoost depth 6 (macro_f1 0.809, ROC AUC 0.923) and HGB (0.809/0.923) are essentially tied, and reducing depth to 4 lowered macro_f1 (0.807), indicating depth 6 is near-optimal capacity. The training set is imbalanced (19742 vs 6266, ~24% minority), so unweighted boosting may under-optimize the minority class, which macro_f1 weights equally. A learning-rate reduction (0.1 -> 0.03) with same max_iter is the untested neighbor to the trial-2 HGB run; slower boosting often improves probabilistic calibration and minority-class recall, potentially lifting macro_f1 above the 0.809 plateau before exploring class weighting.",
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.03,
+        "max_iter": 150,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 0.0,
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "51e6c90458e60c65715f91d31c407348ad820046186237f174f808bd4124110e",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8692709935404491,
+      "macro_f1": 0.8091180949981045,
+      "roc_auc": 0.9210816556523898
+    },
+    "seconds": 5.48499999998603
+  },
+  {
+    "trial": 6,
+    "spec": {
+      "hypothesis": "Boosted models plateaued at macro_f1 ~0.809 (HGB lr=0.1 and 0.03; CatBoost depth 6), and lower CatBoost depth (4) or lower learning rate did not break the plateau. All boosting trials used unweighted loss, yet the training set is imbalanced (19742 vs 6266, ~24% minority) and macro_f1 weights classes equally, so unweighted boosting likely under-optimizes the minority class. Testing class_weight='balanced' on the best-performing HGB configuration (lr=0.1, 150 iters, 31 leaves) isolates class weighting as the untested lever while keeping the strongest baseline capacity, aiming to lift minority-class recall and push macro_f1 above 0.809.",
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.1,
+        "max_iter": 150,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 0.0,
+        "class_weight": "balanced"
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "f08472441289d021d961cf5685bf0e2e7d720e081f94d26b92cd98d69ea6f52b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8329744693940326,
+      "macro_f1": 0.7967159119802779,
+      "roc_auc": 0.9229515287764551
+    },
+    "seconds": 4.85899999999674
+  },
+  {
+    "trial": 7,
+    "spec": {
+      "hypothesis": "Boosting plateaued at macro_f1 ~0.809 across HGB (lr 0.1 and 0.03), CatBoost depth 6, and depth 4; class weighting on HGB hurt (0.797). The untested model family in the candidate space is extremely randomized trees, which offer a different bias-variance tradeoff (random split thresholds, deeper variance control) on this 14-feature, 26k-row, 7-categorical dataset. Extra trees with unlimited depth and sqrt features is the capacity-unconstrained probe; comparing against the depth-8 variant will reveal whether the plateau is a model-family limit or a capacity issue.",
+      "model": "extra_trees",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": null,
+        "min_samples_leaf": 1,
+        "max_features": "sqrt",
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "895618169a899831fd7cb274b3f56b5594824b9504d5464932f2a863f956ce4f",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8348200553675792,
+      "macro_f1": 0.7643286048859588,
+      "roc_auc": 0.8786571310896149
+    },
+    "seconds": 13.84299999999348
+  }
+]

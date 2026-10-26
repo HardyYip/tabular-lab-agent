@@ -1,0 +1,15 @@
+data_path: ../../data/adult-train.csv
+validation_path: ../../data/adult-validation.csv
+test_path: ../../data/adult-test.csv
+target: income
+metric: macro_f1
+run_dir: ../../runs
+device: auto
+llm:
+  provider: deepseek
+limits:
+  budget_cny: 1
+  max_trials: 8
+  max_seconds: 600
+  trial_seconds: 60
+  final_seconds: 60

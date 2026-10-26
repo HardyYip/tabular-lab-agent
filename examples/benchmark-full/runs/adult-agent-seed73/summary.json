@@ -1,0 +1,25 @@
+{
+  "run_id": "20261026T165731Z-cd7a6c74",
+  "strategy": "agent",
+  "provider": "deepseek",
+  "metric": "macro_f1",
+  "stop_reason": "trial_limit",
+  "trials": 8,
+  "failed_trials": 0,
+  "llm_calls": 6,
+  "cost_cny_estimate": 0.07143768,
+  "usage_unknown": false,
+  "best_trial": 2,
+  "best_validation": {
+    "accuracy": 0.869424792371578,
+    "macro_f1": 0.8107211187845934,
+    "roc_auc": 0.9234548815520722
+  },
+  "status": "completed",
+  "test_metrics": {
+    "accuracy": 0.8729193538480438,
+    "macro_f1": 0.8139874930466997,
+    "roc_auc": 0.9276108881106351
+  },
+  "seconds": 96.04700000002049
+}

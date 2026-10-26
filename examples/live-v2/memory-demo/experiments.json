@@ -1,0 +1,90 @@
+[
+  {
+    "trial": 0,
+    "spec": {
+      "hypothesis": "Majority-class reference.",
+      "model": "dummy",
+      "params": {},
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ff5caf15182ec20009bcac73d0bd118e2ae5dfdfb9f837cee8159012b3ca3913",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.7361111111111112,
+      "macro_f1": 0.424,
+      "roc_auc": 0.5
+    },
+    "seconds": 4.671999999962281
+  },
+  {
+    "trial": 1,
+    "spec": {
+      "hypothesis": "Linear baseline with training-only preprocessing.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "7e194c7b738d9b085893c5be22c4c75291161a007dd75a3d3579b3d82d04681b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8611111111111112,
+      "macro_f1": 0.8074866310160428,
+      "roc_auc": 0.9215491559086395
+    },
+    "seconds": 4.39000000001397
+  },
+  {
+    "trial": 2,
+    "spec": {
+      "model": "generated",
+      "hypothesis": "Logistic regression with median imputation, one-hot encoding for the categorical column, and standardization, all fitted inside a pipeline. This mirrors the strong linear baseline while robustly handling missing values and unseen categories."
+    },
+    "fingerprint": "db990b5e492cd95d1f1677bbc0f436e0958a89ca8e6c5dfbb36ef89d9e084a64",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.875,
+      "macro_f1": 0.8301441677588467,
+      "roc_auc": 0.9175769612711023
+    },
+    "seconds": 2.9060000000172295
+  },
+  {
+    "trial": 3,
+    "spec": {
+      "model": "generated",
+      "hypothesis": "Improve on the best logistic baseline by using a CatBoost classifier with native categorical/missing handling alongside a regularized logistic model averaged in an ensemble; CatBoost captures nonlinearities while the linear model stabilizes small-data performance. Keep all preprocessing inside the pipeline and use 4 threads with allow_writing_files=False."
+    },
+    "fingerprint": "9e0f89791e0676872c0c668a3d6bb4d530bdb885207bbfa8c6262db9741a7382",
+    "status": "failed",
+    "seconds": 2.952999999979511
+  },
+  {
+    "trial": 4,
+    "spec": {
+      "model": "generated",
+      "hypothesis": "The CatBoost repair failed because its ColumnTransformer output remained a numeric/object mixed numpy array with object dtype columns CatBoost could not parse as floats. I will instead keep the best logistic baseline (which scored macro_f1 0.830) and add a small, safe ensemble: a tuned logistic model plus a HistGradientBoosting model on fully numeric one-hot-encoded data, all fitted inside the pipeline. This adds nonlinear capacity without CatBoost's dtype fragility, handles missing values/unseen categories via imputers with handle_unknown, and stays within 4 threads."
+    },
+    "fingerprint": "3d7b8c9b01c0aac1fec803ade414c76865b9c4a9445962264290515fd3d08478",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.9166666666666666,
+      "macro_f1": 0.8888888888888888,
+      "roc_auc": 0.9582919563058591
+    },
+    "seconds": 2.9839999999967404
+  }
+]

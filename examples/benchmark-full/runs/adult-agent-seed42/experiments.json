@@ -1,0 +1,212 @@
+[
+  {
+    "trial": 0,
+    "spec": {
+      "hypothesis": "Majority-class reference.",
+      "model": "dummy",
+      "params": {},
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ff5caf15182ec20009bcac73d0bd118e2ae5dfdfb9f837cee8159012b3ca3913",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.7589972316210397,
+      "macro_f1": 0.4314942729736819,
+      "roc_auc": 0.5
+    },
+    "seconds": 5.76500000001397
+  },
+  {
+    "trial": 1,
+    "spec": {
+      "hypothesis": "Linear baseline with training-only preprocessing.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "7e194c7b738d9b085893c5be22c4c75291161a007dd75a3d3579b3d82d04681b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8500461396493386,
+      "macro_f1": 0.7804373713745776,
+      "roc_auc": 0.9044990104284866
+    },
+    "seconds": 4.73399999999674
+  },
+  {
+    "trial": 2,
+    "spec": {
+      "hypothesis": "The linear baseline (C=1.0) already achieves macro_f1 0.78 with roc_auc 0.90, showing strong linearly separable signal from the numeric and low-cardinality features. To probe whether nonlinear interactions among the 14 features (several numeric with wide ranges plus categorical ones) yield additional gains, start with an ExtraTrees ensemble, which handles mixed-type scaled features and captures interactions while being robust. Default max_depth=8 with 200 trees limits overfitting on the 75/25 imbalance without class weighting initially, giving a clean comparison to the linear baseline.",
+      "model": "extra_trees",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 8,
+        "min_samples_leaf": 1,
+        "max_features": "sqrt",
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "5fe1657162186416552a42940c575b71ffc1547aa21e70de4ef4776e2a7c7a62",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8298984927714549,
+      "macro_f1": 0.726984495788525,
+      "roc_auc": 0.8835471208673833
+    },
+    "seconds": 5.436999999976251
+  },
+  {
+    "trial": 3,
+    "spec": {
+      "hypothesis": "The linear logistic baseline (C=1.0) reached macro_f1 0.780 with roc_auc 0.904, while a capped ExtraTrees (max_depth=8) underperformed at macro_f1 0.727, indicating the depth cap limited nonlinear gains rather than nonlinearity being unhelpful. Before abandoning the tree family, test whether removing the depth constraint on ExtraTrees lets it capture deep interactions; if uncapped ExtraTrees still trails logistic, that confirms the signal is largely linear and we should focus on tuning the logistic model instead.",
+      "model": "extra_trees",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": null,
+        "min_samples_leaf": 1,
+        "max_features": "sqrt",
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "895618169a899831fd7cb274b3f56b5594824b9504d5464932f2a863f956ce4f",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8342048600430637,
+      "macro_f1": 0.7632234192871632,
+      "roc_auc": 0.87861219465043
+    },
+    "seconds": 14.063000000023749
+  },
+  {
+    "trial": 4,
+    "spec": {
+      "hypothesis": "Logistic C=1.0 leads at macro_f1 0.780 (roc_auc 0.904); ExtraTrees improved from macro_f1 0.727 to 0.763 when unconstrained but still trails logistic, suggesting the signal is largely linear yet trees capture some structure without linearization. The best linear model used default regularization; testing C=0.1 probes whether stronger regularization improves generalization on the 26k-row, 14-feature problem with a 76/24 class imbalance, which could yield a cleaner decision boundary than C=1.0.",
+      "model": "logistic",
+      "params": {
+        "C": 0.1,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "c617513c694f5d1d745cdddd595f313599c2c9ae77cfc55e835f4beee6086ed7",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.849584743155952,
+      "macro_f1": 0.778919104066512,
+      "roc_auc": 0.9045502185721332
+    },
+    "seconds": 4.0310000000172295
+  },
+  {
+    "trial": 5,
+    "spec": {
+      "hypothesis": "Logistic regression remains the strongest family: C=1.0 gives macro_f1 0.780 (roc_auc 0.904) and C=0.1 gives 0.779, while uncapped ExtraTrees topped out at 0.763, confirming the signal is largely linear. The remaining untested direction within the best family is boosting capacity with less regularization. Repeated tree models suggest extra flexibility does not help, so the lowest-risk high-upside move is to try C=10.0 to see whether relaxing regularization lets the linear model capture more structure without overfitting, since C=0.1 vs C=1.0 showed essentially a plateau and C=10.0 was never probed.",
+      "model": "logistic",
+      "params": {
+        "C": 10.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "9accccfdd7b0f0053648ad74654f2c0c75cb66b0918dab9a8d893c0b7fa8624b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8501999384804676,
+      "macro_f1": 0.7809401339372005,
+      "roc_auc": 0.9046053061206015
+    },
+    "seconds": 4.10899999999674
+  },
+  {
+    "trial": 6,
+    "spec": {
+      "hypothesis": "Logistic regression dominates: C=10.0 reaches macro_f1 0.781 (roc_auc 0.905), C=1.0 and C=0.1 give ~0.78/0.779, and uncapped ExtraTrees trailed at 0.763, confirming a largely linear signal. With regularization strength now effectively plateaued across three orders of magnitude without class weighting, the highest-value untested lever for macro_f1 on this 76/24 imbalance is class weighting. Testing C=1.0 with class_weight='balanced' probes whether rebalancing the decision threshold for the minority class lifts macro_f1 beyond 0.781, independent of the regularization plateau already observed.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": "balanced",
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ba6d82ab648ee11457a2378d7dcea52185f88fef9ef2d4927d963497e90db821",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8154414026453399,
+      "macro_f1": 0.7784772714341638,
+      "roc_auc": 0.9048299236597788
+    },
+    "seconds": 4.077999999979511
+  },
+  {
+    "trial": 7,
+    "spec": {
+      "hypothesis": "The logistic family dominates (C=10.0 macro_f1 0.781, C=1.0 0.780, C=0.1 0.779), with a flat plateau across three orders of magnitude, while balanced class weighting at C=1.0 did not improve (0.778). ExtraTrees maxed at 0.763, so nonlinearity has not beaten the linear signal. The key remaining question is whether a modern gradient-boosted model can capture any interaction structure the linear models and trees miss; logistic has plateaued, so the best untested nonlinear candidate worth probing is HistGradientBoosting with a moderate learning rate. Comparing its boosted interactions against the 0.781 linear ceiling tells us whether to keep optimizing the linear family or invest in boosting.",
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.1,
+        "max_iter": 150,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 0.0,
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "9cba613fd52b35c6835e2d2a8a86ea9202d7ae2e5e3164af77e8f29472459686",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8672716087357736,
+      "macro_f1": 0.8076953908007936,
+      "roc_auc": 0.922675250496402
+    },
+    "seconds": 4.920999999972992
+  }
+]

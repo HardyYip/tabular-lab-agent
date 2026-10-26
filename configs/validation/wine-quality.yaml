@@ -1,0 +1,13 @@
+data_path: ../../data/wine-quality.csv
+target: quality_class
+metric: macro_f1
+run_dir: ../../runs
+device: auto
+llm:
+  provider: deepseek
+limits:
+  budget_cny: 1
+  max_trials: 8
+  max_seconds: 600
+  trial_seconds: 60
+  final_seconds: 60

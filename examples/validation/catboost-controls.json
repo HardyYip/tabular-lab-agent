@@ -1,0 +1,38 @@
+[
+  {
+    "trial": "002",
+    "control": "plain",
+    "fit_ok": false,
+    "matched_expectation": true
+  },
+  {
+    "trial": "002",
+    "control": "nofiles",
+    "fit_ok": true,
+    "matched_expectation": true
+  },
+  {
+    "trial": "002",
+    "control": "chdir",
+    "fit_ok": true,
+    "matched_expectation": true
+  },
+  {
+    "trial": "003",
+    "control": "plain",
+    "fit_ok": false,
+    "matched_expectation": true
+  },
+  {
+    "trial": "003",
+    "control": "nofiles",
+    "fit_ok": true,
+    "matched_expectation": true
+  },
+  {
+    "trial": "003",
+    "control": "chdir",
+    "fit_ok": true,
+    "matched_expectation": true
+  }
+]

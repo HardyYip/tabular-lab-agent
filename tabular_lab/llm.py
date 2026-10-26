@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Literal
 
@@ -10,6 +9,7 @@ import httpx
 from pydantic import Field
 
 from .config import ExperimentSpec, LLMConfig, StrictModel
+from .credentials import CredentialError, get_api_key
 from .io import append_event
 
 
@@ -66,9 +66,13 @@ class JSONClient:
             return json.loads(original["content"])
         if self.config.provider != "deepseek":
             raise ValueError("JSONClient requires deepseek or replay")
-        key = os.environ.get("DEEPSEEK_API_KEY")
+        try:
+            key = get_api_key()
+        except CredentialError as exc:
+            raise StopRun(str(exc)) from None
         if not key:
-            raise StopRun("DEEPSEEK_API_KEY is not set; use mock for an offline run")
+            raise StopRun("No DeepSeek key: set DEEPSEEK_API_KEY or run 'python -m tabular_lab auth login' "
+                          "on Windows; use mock for an offline run")
         # UTF-8 bytes + overhead is deliberately conservative; no cache discounts assumed.
         input_bound = len(json.dumps(messages, ensure_ascii=False).encode("utf-8")) + 1024
         reservation = self.cost(input_bound, self.config.max_output_tokens)
@@ -148,6 +152,9 @@ def code_prompt() -> str:
         "Only numpy, pandas, scipy, sklearn, catboost and standard-library modules are installed. "
         "Do not read files, access labels outside fit, run commands, use network or install packages. "
         "All preprocessing must be fitted inside the returned pipeline. Use at most 4 CPU threads. "
+        "The current working directory is writable temporary scratch; the root filesystem and inputs are read-only. "
+        "For CatBoost, set allow_writing_files=False to avoid unnecessary training files. "
         "Handle missing values and unseen categories. Labels are integer encoded. "
         "Use validation scores and error feedback to improve or repair your code. Never change the evaluator."
+        " When best_generated is present, use its source and validation metrics as a starting point for improvement."
     )

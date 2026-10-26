@@ -1,0 +1,23 @@
+{
+  "run_id": "20261026T163039Z-7f70387f",
+  "strategy": "codegen",
+  "provider": "deepseek",
+  "metric": "macro_f1",
+  "stop_reason": "trial_limit",
+  "trials": 5,
+  "failed_trials": 1,
+  "llm_calls": 4,
+  "cost_cny_estimate": 0.06132456,
+  "usage_unknown": false,
+  "best_trial": 3,
+  "best_validation": {
+    "accuracy": 0.5864661654135338,
+    "macro_f1": 0.5867353867353867
+  },
+  "status": "completed",
+  "test_metrics": {
+    "accuracy": 0.6221804511278195,
+    "macro_f1": 0.6131776159932715
+  },
+  "seconds": 69.32800000003772
+}

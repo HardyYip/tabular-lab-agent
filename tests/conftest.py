@@ -8,6 +8,19 @@ from sklearn.datasets import make_classification
 from tabular_lab.config import Limits, TaskConfig
 
 
+@pytest.fixture(autouse=True)
+def isolate_credentials(monkeypatch):
+    import tabular_lab.credentials as credentials
+
+    class BlockedStore:
+        def __init__(self, *args, **kwargs):
+            raise credentials.CredentialError("saved credentials are unavailable during tests")
+
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(credentials, "read_saved_key", lambda: None)
+    monkeypatch.setattr(credentials, "WindowsCredentialStore", BlockedStore)
+
+
 @pytest.fixture
 def task(tmp_path: Path):
     X, y = make_classification(n_samples=180, n_features=5, n_informative=4, n_redundant=0,

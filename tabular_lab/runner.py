@@ -105,6 +105,15 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
                 context = _context(dataset, history, task)
                 context.pop("candidate_space")
                 context["feature_schema"] = {c: str(dataset.train.X[c].dtype) for c in dataset.columns}
+                context["execution_limits"] = {"trial_seconds": task.limits.trial_seconds,
+                                                "cpus": task.docker.cpus, "memory": task.docker.memory}
+                successful_code = [h for h in history if h["spec"]["model"] == "generated" and h["status"] == "ok"]
+                if successful_code:
+                    previous = max(successful_code, key=lambda h: h["metrics"][task.metric])
+                    source = folder / "trials" / f"{previous['trial']:03d}" / "container-input" / "candidate.py"
+                    context["best_generated"] = {"trial": previous["trial"],
+                                                 "code": source.read_text(encoding="utf-8"),
+                                                 "metrics": previous["metrics"]}
                 if pending_code:
                     context["repair"] = pending_code
                 decision = CodePlan.model_validate(llm.ask(code_prompt(), context, timeout=available))
@@ -255,6 +264,9 @@ def predict(model: Path, input_path: Path, output: Path):
 
 
 def _report(folder, summary, history):
+    devices = sorted({h["device_used"] for h in history if h.get("device_used")})
+    execution = ("Generated pipelines in CPU Docker containers" if summary["strategy"] == "codegen" else
+                 "Finite search space; observed training devices: " + (", ".join(devices) or "not recorded"))
     lines = ["# Tabular Lab experiment report", "", f"Strategy: **{summary['strategy']}**; "
              f"provider: **{summary['provider']}**. Mock/replay results are not live LLM results.", "",
              f"Status: {summary['status']}; stop reason: {summary['stop_reason']}", "",
@@ -271,7 +283,7 @@ def _report(folder, summary, history):
         lines.append(f"- Trial {h['trial']}: {h['spec']['hypothesis']}")
     lines.extend(["", "## Final test (not used for selection)", "", "```json",
                   json.dumps(summary.get("test_metrics", {}), indent=2), "```", "",
-                  "## Limitations", "", "Finite search space; one validation split per run; CPU execution. "
+                  "## Limitations", "", execution + "; one validation split per run. "
                   "Scores on these datasets do not establish broad generalization or LLM superiority. "
                   "Configured peak/cache-miss prices and FX yield conservative estimates, not provider invoices. "
                   "Unknown-usage calls stop subsequent requests. Run three seeds before drawing comparisons."])

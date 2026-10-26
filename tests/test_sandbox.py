@@ -1,7 +1,10 @@
 import json
 import os
 import shutil
+import subprocess
+import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -24,6 +27,17 @@ def test_codegen_syntax_and_interface():
         validate_code("def wrong(): pass")
     with pytest.raises(SyntaxError):
         validate_code("def build_pipeline(:")
+
+
+def test_syntax_error_preserves_code_and_reports_location_without_raw_message(task, tmp_path):
+    from tabular_lab.sandbox import evaluate_code
+    code = "def build_pipeline(:\n    pass\n"
+    result = evaluate_code(task, load_dataset(task), code, tmp_path / "invalid", 10)
+    assert result["status"] == "failed"
+    assert result["safe_error"]["error_type"] == "SyntaxError"
+    assert result["safe_error"]["line"] == 1 and result["safe_error"]["offset"] > 0
+    assert set(result["safe_error"]) == {"error_type", "line", "offset"}
+    assert (tmp_path / "invalid" / "candidate.py").read_text() == code
 
 
 def test_docker_boundary_has_no_api_secret_or_eval_labels(task, tmp_path, monkeypatch):
@@ -90,9 +104,50 @@ def build_pipeline(seed, feature_schema):
 
 
 @pytest.mark.docker
-def test_codegen_controller_repairs_failed_candidate_with_replay(task, tmp_path):
+def test_catboost_default_file_output_uses_scratch_directory(task, tmp_path):
+    from tabular_lab.sandbox import evaluate_code
+    require_docker(task.docker.image)
+    code = '''from sklearn.compose import make_column_transformer, make_column_selector
+from sklearn.pipeline import make_pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder
+from catboost import CatBoostClassifier
+def build_pipeline(seed, feature_schema):
+    numeric = SimpleImputer()
+    category = make_pipeline(SimpleImputer(strategy="most_frequent"),
+                             OneHotEncoder(handle_unknown="ignore", sparse_output=False))
+    preprocess = make_column_transformer((numeric, make_column_selector(dtype_include="number")),
+                                        (category, make_column_selector(dtype_exclude="number")))
+    return make_pipeline(preprocess, CatBoostClassifier(iterations=20, depth=3, verbose=False,
+                                                       random_seed=seed, thread_count=2))
+'''
+    data = load_dataset(task)
+    result = evaluate_code(task, data, code, tmp_path / "catboost", 60)
+    assert result["status"] == "ok", result
+    assert 0 <= result["metrics"]["macro_f1"] <= 1
+
+
+@pytest.mark.docker
+def test_timed_out_generated_code_leaves_no_container(task, tmp_path, monkeypatch):
+    import tabular_lab.sandbox as sandbox
+    require_docker(task.docker.image)
+    suffix = uuid.uuid4().hex
+    monkeypatch.setattr(sandbox.uuid, "uuid4", lambda: SimpleNamespace(hex=suffix))
+    code = "def build_pipeline(seed, feature_schema):\n    while True:\n        pass\n"
+    result = sandbox.evaluate_code(task, load_dataset(task), code, tmp_path / "timeout", 3)
+    assert result["status"] == "timeout", result
+    name = "tabular-lab-" + suffix[:16]
+    containers = subprocess.run([sandbox.docker_executable(), "ps", "-a", "--filter", f"name=^/{name}$",
+                                 "--format", "{{.Names}}"], capture_output=True, text=True, check=True, timeout=15)
+    assert not containers.stdout.strip()
+
+
+@pytest.mark.docker
+def test_codegen_controller_repairs_failed_candidate_with_replay(task, tmp_path, monkeypatch):
+    import tabular_lab.runner as runner
     from tabular_lab.config import LLMConfig
     from tabular_lab.io import append_event, read_json
+    from tabular_lab.llm import JSONClient
     from tabular_lab.runner import run_task
     require_docker(task.docker.image)
     responses = tmp_path / "responses.jsonl"
@@ -112,13 +167,27 @@ def build_pipeline(seed, feature_schema):
     for code in (broken, repaired):
         append_event(responses, {"event": "llm_response", "content": json.dumps(
             {"action": "code", "hypothesis": "Exercise controlled repair", "code": code})})
+    append_event(responses, {"event": "llm_response", "content": json.dumps(
+        {"action": "stop", "reason": "Successful candidate is available"})})
+    contexts = []
+
+    class CaptureReplay(JSONClient):
+        def ask(self, system, context, timeout=None):
+            contexts.append(context)
+            return super().ask(system, context, timeout)
+
+    monkeypatch.setattr(runner, "JSONClient", CaptureReplay)
     task.llm = LLMConfig(provider="replay", replay_path=responses)
     task.strategy = "codegen"
-    task.limits.max_trials = 4
+    task.limits.max_trials = 5
     result = run_task(task)
     assert result["status"] == "completed", result
     assert result["trials"] == 4 and result["failed_trials"] == 1
-    assert result["llm_calls"] == 2 and result["cost_cny_estimate"] == 0
+    assert result["llm_calls"] == 3 and result["cost_cny_estimate"] == 0
     history = read_json(Path(result["path"]) / "experiments.json")
     assert history[2]["status"] == "failed" and history[3]["status"] == "ok"
     assert history[2]["spec"]["model"] == history[3]["spec"]["model"] == "generated"
+    assert contexts[1]["repair"]["code"] == broken
+    assert contexts[2]["best_generated"]["code"] == repaired
+    assert contexts[2]["best_generated"]["metrics"] == history[3]["metrics"]
+    assert "test_metrics" not in json.dumps(contexts)

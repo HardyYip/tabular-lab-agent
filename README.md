@@ -9,21 +9,28 @@ The evaluator owns data splitting, scoring, model selection, and resource limits
 V1 runs on Windows without Docker. CatBoost optionally uses an NVIDIA GPU; other V1 estimators use CPU.
 
 Windows/Linux offline CI, local Windows Docker integration and Linux Docker integration have passed.
-One live DeepSeek V1 run has also completed; multi-seed live comparisons and real LLM-generated V2
-experiments remain pending. Local V2 use requires Docker Desktop with a Linux engine.
+Live DeepSeek V1 experiments and V2 generated pipelines have completed on public datasets. V2 has
+been checked on a synthetic demo, Wine Quality and Adult, including reloading exported models in new
+processes. Local V2 use requires Docker Desktop with a Linux engine.
 
 This project is under active development. Offline/mock demonstrations are explicitly labeled and do not
 establish the benefit of an LLM. Live DeepSeek comparisons require your own API key.
 
-Local real-data references (3 seeds, 12 completed runs, no API calls):
+Completed V1 comparison (four datasets, three seeds, **36/36 completed runs**, zero failed candidates):
 
-| Dataset | Fixed baseline macro-F1 | Random search macro-F1 |
-| --- | ---: | ---: |
-| Wine Quality (three classes) | 0.5547 ± 0.0144 | 0.5883 ± 0.0138 |
-| Adult | 0.7815 ± 0.0000 | 0.8078 ± 0.0103 |
+| Dataset | Fixed baseline macro-F1 | Random search macro-F1 | LLM Agent macro-F1 |
+| --- | ---: | ---: | ---: |
+| Breast Cancer | 0.9843 ± 0.0054 | 0.9843 ± 0.0054 | 0.9843 ± 0.0054 |
+| Wine | 0.9903 ± 0.0168 | 0.9903 ± 0.0168 | 0.9903 ± 0.0168 |
+| Wine Quality | 0.5547 ± 0.0144 | 0.5883 ± 0.0138 | 0.5850 ± 0.0079 |
+| Adult | 0.7815 ± 0.0000 | 0.8078 ± 0.0103 | 0.8143 ± 0.0004 |
 
-Fixed baselines use 2 candidates; random search uses 8. See the
-[full results and figure](examples/benchmark-local/README.md) and [validation status](docs/VALIDATION.md).
+Fixed baselines use two candidates; random search and the Agent share the same finite registry and
+eight-candidate ceiling. The 12 live Agent runs made 74 API calls at an estimated total CNY 0.926923.
+The Agent tied the small-data baselines, slightly trailed random search on Wine Quality, and had a
+higher mean on Adult. Three seeds support a descriptive comparison, not a general superiority claim.
+See [all results, costs, failure rates and figure](examples/benchmark-full/README.md), the
+[independent audit](examples/benchmark-full/audit.json), and [validation status](docs/VALIDATION.md).
 
 ```mermaid
 flowchart LR
@@ -97,12 +104,27 @@ No PyTorch/CUDA toolkit installation is needed for V1's CatBoost GPU path.
 
 ## Live DeepSeek and replay
 
-Set the key in your own terminal; `.env` is an example only and is not loaded automatically:
+On Windows, save your key once using hidden input. Subsequent runs, including new terminals, read it
+from Windows Credential Manager for the current user:
 
 ```powershell
-$env:DEEPSEEK_API_KEY = "your-key"
+.\.venv\Scripts\python.exe -m tabular_lab auth login
+```
+
+Run `auth login` only for initial setup or when replacing your key. After that, start experiments from
+any new terminal without entering the key again:
+
+```powershell
 .\.venv\Scripts\python.exe -m tabular_lab run --task configs/wine-quality.yaml --provider deepseek
 ```
+
+`auth status` checks local availability without revealing the key or calling the API and exits non-zero
+when none is configured; `auth logout` deletes the saved credential. An explicitly set `DEEPSEEK_API_KEY`
+takes priority over the saved key. `python scripts/verify_credentials.py` confirms that the stored key
+reaches the request header using a local mock transport, so it makes no network request.
+Linux/CI use that environment variable; `.env` files are not loaded automatically. Keys are never
+written to task YAML or experiment logs, and generated-code containers receive no credentials.
+The Windows store protects persistent storage; applications running as your Windows user can read it.
 
 Default model: `deepseek-flash`; change it and the pricing snapshot together in task YAML. We record
 the model returned by the provider as well as the configured alias. The alias can change server-side;
@@ -140,9 +162,12 @@ The local budget controller cannot enforce an account-wide provider spending lim
 .\.venv\Scripts\python.exe -m tabular_lab benchmark --suite configs/benchmark-local.yaml
 # Add live LLM comparisons after setting your key (multiple runs incur separate budgets)
 .\.venv\Scripts\python.exe -m tabular_lab benchmark --suite configs/benchmark.yaml
+# Full release-validation matrix: 4 datasets x 3 seeds x 3 strategies
+.\.venv\Scripts\python.exe -m tabular_lab prepare --dataset all
+.\.venv\Scripts\python.exe -m tabular_lab benchmark --suite configs/benchmark-full.yaml
 ```
 
-Both suites use seeds 17/42/73 and matching task configurations. Fixed baselines run two candidates;
+All suites use seeds 17/42/73 and matching task configurations. Fixed baselines run two candidates;
 random search and the Agent receive up to eight candidates, including those same two baselines.
 Do not interpret the fixed reference's lower compute usage as an equal-budget search comparison.
 Adult's externally prepared split is fixed; seeds change estimator/search randomness. Wine Quality's
@@ -151,6 +176,12 @@ internal split and estimator/search randomness change with the seed.
 Each run uses only validation scores for selection; test scores appear after the winning candidate is
 frozen. Suite outputs are `results.csv`, `results.json`, and `aggregate.csv` (mean/std across seeds).
 Report runtime, cost and failures alongside scores; an LLM is not guaranteed to beat random search.
+Audit local completed V1 runs without loading model objects or making API calls:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/verify_benchmark.py --input runs/benchmark-full
+```
+
 If changing the system after inspecting benchmark test scores, treat those scores as development
 feedback and use a fresh held-out task for a new generalization claim.
 
@@ -172,17 +203,31 @@ local paths and binary models stay private. Review custom experiment hypotheses 
 
 ## V2: generated pipelines (Docker required)
 
+Configure the key once as described in [Live DeepSeek and replay](#live-deepseek-and-replay).
+From the repository root, prepare the demo and build the worker image once, then start a small live run:
+
 ```powershell
+.\.venv\Scripts\python.exe -m tabular_lab prepare --dataset demo
 docker build -t tabular-lab-worker:0.1.0 -f docker/Dockerfile .
 .\.venv\Scripts\python.exe -m tabular_lab docker-check
-.\.venv\Scripts\python.exe -m tabular_lab run --task configs/codegen.yaml
+.\.venv\Scripts\python.exe -m tabular_lab auth status
+.\.venv\Scripts\python.exe -m tabular_lab run --task configs/codegen-smoke.yaml
 ```
+
+The last command makes paid API requests. The smoke configuration uses an estimated **CNY 1 budget**,
+a **300-second run budget**, and **at most five candidates**, including two fixed baselines.
+The remaining three slots include generated attempts and repairs; the Agent may stop earlier.
+Each training attempt and final refit is limited to 60 seconds. Containers use 4 CPUs and 8 GB memory.
+Docker preflight, cleanup and file export can add overhead beyond the run budget.
+`configs/codegen.yaml` remains available with the general run defaults described above.
 
 Generated source implements `build_pipeline(seed, feature_schema)` returning a classifier pipeline.
 The controller can pass sanitized exception type/stack locations back for up to two repairs per
 candidate; **every executed repair also consumes a trial slot**. Baselines and final selection stay
 under the trusted evaluator. Generated code can extend features and models; the finite V1 search-space
 comparison does not apply to V2.
+Subsequent proposals receive the best successful generated source and its validation metrics, in
+addition to failure feedback and execution limits. Syntax failures return line/offset without raw messages.
 
 Containers use an immutable local image ID, a nonroot user, no network/capabilities, read-only root,
 limited CPU/memory/processes/time, a temporary filesystem and mounts for this candidate only. Training
@@ -193,14 +238,45 @@ Container cleanup explicitly removes timed-out containers. This is a local learn
 service hardened to execute adversarial submissions.
 
 V2 defaults to CPU containers and does not require GPU passthrough. Docker is currently an optional
-prerequisite; `docker-check` explains missing setup and V1 remains usable. End-to-end V2 and live LLM
-validation must be recorded separately from static/unit checks.
+prerequisite; `docker-check` explains missing setup and V1 remains usable.
+
+### Verified live V2 runs (2026-10-26–27)
+
+These runs used real DeepSeek responses and actual Docker execution. Every run executed two fixed
+baselines and three generated candidates, then selected and exported a generated pipeline:
+
+| Dataset | Test macro-F1 | Failed candidates | API calls | Seconds | Estimated CNY |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Synthetic demo | 0.922995 | 2 | 3 | 32.2 | 0.026672 |
+| Wine Quality | 0.613178 | 1 | 4 | 69.3 | 0.061325 |
+| Adult | 0.814883 | 0 | 3 | 83.8 | 0.034288 |
+| Additional memory-validation demo | 0.879464 | 1 | 4 | 44.0 | 0.038528 |
+
+All 72 / 1,064 / 16,281 exported test predictions were reproduced by new processes inside Docker.
+The original demo's CatBoost failures were reproduced and traced to default file output in a read-only
+working directory. The executor now uses writable bounded `/tmp` scratch, while the root remains
+read-only; a regression test covers default CatBoost output. The successful third demo attempt changed
+estimator, so it did not demonstrate a fix of that specific error by the LLM.
+
+These are single-seed functional validations, not evidence of general repair ability or a matched-budget
+V1/V2 comparison. Failed attempts remain in the records. A run-level `completed` status alone is
+insufficient: check that a generated candidate actually succeeded, since baselines may still succeed
+when all generated attempts fail. See [public V2 records and generated source](examples/live-v2/README.md),
+[validation status](docs/VALIDATION.md), and the Chinese [first-run guide](docs/V2_FIRST_RUN.zh-CN.md).
+
+For real-data V2 runs, use `configs/codegen-wine-quality.yaml` or `configs/codegen-adult.yaml` after
+preparing the relevant dataset. Both use a CNY 1 estimated budget, five candidates and a ten-minute
+run budget. V2's generated candidate space is broader than the finite V1 registry.
 
 On Windows, the application also checks the standard per-user and all-users Docker Desktop locations
 when `docker` is absent from an older terminal's PATH. Reopen PowerShell if you want to use the bare
 `docker` command directly after installation.
 
 ## Tests and learning
+
+Recorded local Windows verification: **49 passed, 0 skipped** (45 offline tests and four actual Docker
+integration tests). A separate Linux container passed all **45 offline tests**. Docker coverage includes
+train/export/predict, replay-driven repair, CatBoost scratch output and timed-out container cleanup.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
@@ -216,6 +292,8 @@ missing. CI builds the container on Linux and runs that integration test separat
 
 Start with the Chinese [learning guide](docs/LEARNING.zh-CN.md), [architecture](docs/ARCHITECTURE.md),
 [dataset roadmap](docs/DATASETS.md), and [AI usage statement](docs/AI_USAGE.md).
+The next guided session is outlined in [the Chinese code-reading plan](docs/NEXT_SESSION.zh-CN.md).
+See the [four-stage acceptance record](docs/ACCEPTANCE.zh-CN.md) and [release notes](CHANGELOG.md).
 
 ## License
 

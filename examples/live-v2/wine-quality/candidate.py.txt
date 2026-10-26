@@ -1,0 +1,158 @@
+import numpy as np
+import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin, ClassifierMixin
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import VotingClassifier
+from catboost import CatBoostClassifier
+
+
+class FeatureEngineer(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        self.cat_cols_ = None
+        self.num_cols_ = None
+
+    def fit(self, X, y=None):
+        self.cat_cols_ = [c for c in X.columns if X[c].dtype == object or str(X[c].dtype) == 'category']
+        self.num_cols_ = [c for c in X.columns if c not in self.cat_cols_]
+        return self
+
+    def transform(self, X):
+        X = X.copy()
+        num = [c for c in self.num_cols_ if c in X.columns]
+        eps = 1e-6
+        if 'free sulfur dioxide' in num and 'total sulfur dioxide' in num:
+            X['so2_ratio'] = X['free sulfur dioxide'] / (X['total sulfur dioxide'] + eps)
+            X['bound_so2'] = X['total sulfur dioxide'] - X['free sulfur dioxide']
+        if 'alcohol' in num and 'density' in num:
+            X['alc_density'] = X['alcohol'] / (X['density'] + eps)
+        if 'residual sugar' in num and 'alcohol' in num:
+            X['sugar_alc'] = X['residual sugar'] * X['alcohol']
+        if 'volatile acidity' in num and 'citric acid' in num:
+            X['va_ca'] = X['volatile acidity'] - X['citric acid']
+            X['va_ca_ratio'] = X['volatile acidity'] / (X['citric acid'] + eps)
+        if 'free sulfur dioxide' in num and 'total sulfur dioxide' in num and 'volatile acidity' in num:
+            X['so2_va'] = X['free sulfur dioxide'] / (X['volatile acidity'] + eps)
+        if 'sulphates' in num and 'chlorides' in num:
+            X['sulph_chlor'] = X['sulphates'] / (X['chlorides'] + eps)
+        if 'fixed acidity' in num and 'pH' in num:
+            X['fa_ph'] = X['fixed acidity'] - X['pH']
+        return X
+
+
+class CatBoostWrapper(BaseEstimator, ClassifierMixin):
+    def __init__(self, iterations=800, depth=6, learning_rate=0.05, class_weight=None,
+                 random_state=42, l2_leaf_reg=3.0):
+        self.iterations = iterations
+        self.depth = depth
+        self.learning_rate = learning_rate
+        self.class_weight = class_weight
+        self.random_state = random_state
+        self.l2_leaf_reg = l2_leaf_reg
+
+    def fit(self, X, y):
+        self.model_ = CatBoostClassifier(
+            iterations=self.iterations,
+            depth=self.depth,
+            learning_rate=self.learning_rate,
+            l2_leaf_reg=self.l2_leaf_reg,
+            loss_function='MultiClass',
+            random_seed=self.random_state,
+            thread_count=4,
+            allow_writing_files=False,
+            verbose=False,
+            class_weights=self.class_weight,
+        )
+        self.feature_names_ = list(X.columns)
+        self.cat_features_ = [c for c in X.columns if X[c].dtype == object or str(X[c].dtype) == 'category']
+        Xc = X.copy()
+        for c in self.cat_features_:
+            Xc[c] = Xc[c].astype(str).fillna('__NA__')
+        self.model_.fit(Xc, y, cat_features=self.cat_features_ if self.cat_features_ else None)
+        self.classes_ = self.model_.classes_
+        return self
+
+    def _prep(self, X):
+        Xc = pd.DataFrame(X, columns=self.feature_names_) if not isinstance(X, pd.DataFrame) else X.copy()
+        for c in self.cat_features_:
+            if c in Xc.columns:
+                Xc[c] = Xc[c].astype(str).fillna('__NA__')
+        return Xc
+
+    def predict(self, X):
+        return self.model_.predict(self._prep(X)).ravel().astype(int)
+
+    def predict_proba(self, X):
+        proba = self.model_.predict_proba(self._prep(X))
+        return proba
+
+
+class EnsembleWrapper(BaseEstimator, ClassifierMixin):
+    def __init__(self, seed=42, feature_schema=None):
+        self.seed = seed
+        self.feature_schema = feature_schema
+
+    def fit(self, X, y):
+        y = np.asarray(y).astype(int)
+        self.classes_ = np.unique(y)
+        n = len(y)
+        counts = np.bincount(y - y.min()) if y.min() == 0 else None
+        if counts is None:
+            counts = np.array([(y == c).sum() for c in self.classes_])
+        weights = n / (len(self.classes_) * np.maximum(counts, 1))
+        cw = {int(c): float(weights[i]) for i, c in enumerate(self.classes_)}
+
+        cat_model = CatBoostWrapper(iterations=900, depth=6, learning_rate=0.04,
+                                    class_weight=cw, random_state=self.seed, l2_leaf_reg=4.0)
+        cat_model.fit(X, y)
+        self.cat_model_ = cat_model
+
+        self.cat_cols_ = list(cat_model.cat_features_)
+        self.num_cols_ = [c for c in X.columns if c not in self.cat_cols_]
+
+        num_pipe = Pipeline([
+            ('impute', SimpleImputer(strategy='median')),
+            ('scale', StandardScaler()),
+        ])
+        cat_pipe = Pipeline([
+            ('impute', SimpleImputer(strategy='constant', fill_value='__NA__')),
+            ('enc', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)),
+        ])
+        self.ct_ = ColumnTransformer([
+            ('num', num_pipe, self.num_cols_),
+            ('cat', cat_pipe, self.cat_cols_),
+        ], remainder='drop')
+        Xt = self.ct_.fit_transform(X, y)
+        self.lr_ = LogisticRegression(C=1.0, max_iter=2000, class_weight=cw,
+                                      random_state=self.seed, n_jobs=1)
+        self.lr_.fit(Xt, y)
+        return self
+
+    def predict_proba(self, X):
+        p1 = self.cat_model_.predict_proba(X)
+        Xt = self.ct_.transform(X)
+        p2 = self.lr_.predict_proba(Xt)
+        # align columns
+        cols1 = list(self.cat_model_.classes_)
+        cols2 = list(self.lr_.classes_)
+        full = list(self.classes_)
+        def align(p, cols):
+            out = np.zeros((p.shape[0], len(full)))
+            for j, c in enumerate(cols):
+                out[:, full.index(c)] = p[:, j]
+            return out
+        return 0.75 * align(p1, cols1) + 0.25 * align(p2, cols2)
+
+    def predict(self, X):
+        proba = self.predict_proba(X)
+        return self.classes_[np.argmax(proba, axis=1)]
+
+
+def build_pipeline(seed: int, feature_schema: dict):
+    return Pipeline([
+        ('fe', FeatureEngineer()),
+        ('model', EnsembleWrapper(seed=seed, feature_schema=feature_schema)),
+    ])

@@ -24,6 +24,11 @@
 小实验：运行一次 baseline，再运行 random，比较验证集选择过程和最终测试结果。
 配置 DeepSeek 后，再看模型给出的实验假设是否真的引用了已有证据。
 
+Windows 使用 `python -m tabular_lab auth login` 首次保存密钥，以后自动读取。
+`credentials.get_api_key()` 先读环境变量，再读 Windows 凭据管理器；`llm.JSONClient.ask()`
+只在调用 API 时读取密钥。配置密钥属于宿主运行环境，不属于 Agent 的实验决策。
+训练容器没有凭据存储或密钥环境变量的挂载。
+
 ## 第三步：理解预算、失败与复现
 
 查看 `events.jsonl` 中的 `llm_request`、`llm_response`、`experiment_result`。

@@ -1,0 +1,9 @@
+tasks:
+  - validation/breast-cancer.yaml
+  - validation/wine.yaml
+  - validation/wine-quality.yaml
+  - validation/adult.yaml
+seeds: [17, 42, 73]
+strategies: [baseline, random, agent]
+provider: deepseek
+output_dir: ../runs/benchmark-full
