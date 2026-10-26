@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import os
 import shutil
 import subprocess
 import tempfile
@@ -17,15 +18,35 @@ from .models import score_predictions
 from .process import run_process
 
 
+def _docker_candidates() -> list[Path]:
+    if os.name != "nt":
+        return []
+    candidates = []
+    if local := os.environ.get("LOCALAPPDATA"):
+        candidates.append(Path(local) / "Programs" / "DockerDesktop" / "resources" / "bin" / "docker.exe")
+    if program_files := os.environ.get("ProgramFiles"):
+        candidates.append(Path(program_files) / "Docker" / "Docker" / "resources" / "bin" / "docker.exe")
+    return candidates
+
+
+def docker_executable() -> str:
+    """Find a fresh Desktop install even when this parent process has a stale PATH."""
+    if executable := shutil.which("docker"):
+        return executable
+    for candidate in _docker_candidates():
+        if candidate.is_file():
+            return str(candidate)
+    raise RuntimeError("V2 requires Docker Desktop with a Linux engine. Install/start it; V1 needs no Docker.")
+
+
 def preflight(image: str) -> dict:
-    if not shutil.which("docker"):
-        raise RuntimeError("V2 requires Docker Desktop with a Linux engine. Install/start it; V1 needs no Docker.")
+    executable = docker_executable()
     try:
-        info = subprocess.run(["docker", "info", "--format", "{{.OSType}}"],
+        info = subprocess.run([executable, "info", "--format", "{{.OSType}}"],
                               capture_output=True, text=True, timeout=15, check=True)
         if info.stdout.strip() != "linux":
             raise RuntimeError("V2 requires Linux containers, not Windows containers")
-        inspect = subprocess.run(["docker", "image", "inspect", image, "--format", "{{.Id}}"],
+        inspect = subprocess.run([executable, "image", "inspect", image, "--format", "{{.Id}}"],
                                  capture_output=True, text=True, timeout=15, check=True)
     except (subprocess.SubprocessError, OSError) as exc:
         raise RuntimeError("Docker engine/image unavailable. Run: docker build -t " + image +
@@ -40,8 +61,9 @@ def validate_code(code: str):
         raise ValueError("source must define build_pipeline(seed, feature_schema)")
 
 
-def docker_command(task, image_id: str, input_dir: Path, output_dir: Path, name: str):
-    return ["docker", "run", "--rm", "--name", name, "--network=none", "--read-only",
+def docker_command(task, image_id: str, input_dir: Path, output_dir: Path, name: str,
+                   executable: str = "docker"):
+    return [executable, "run", "--rm", "--name", name, "--network=none", "--read-only",
             "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128",
             "--memory=" + task.docker.memory, "--memory-swap=" + task.docker.memory,
             "--cpus=" + str(task.docker.cpus), "--user=65534:65534",
@@ -58,14 +80,15 @@ def _execute(task, folder, timeout, image_id):
     input_dir, output_dir = folder / "container-input", folder / "container-output"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_dir.chmod(0o777)  # dedicated bind mount writable by the nonroot container UID on Linux
-    command = docker_command(task, image_id, input_dir, output_dir, name)
+    executable = docker_executable()
+    command = docker_command(task, image_id, input_dir, output_dir, name, executable)
     started = time.monotonic()
     try:
         result = run_process(command, folder / "docker.log", timeout, task.docker.cpus)
     finally:
         # Killing the docker CLI alone does not necessarily stop its container.
         try:
-            subprocess.run(["docker", "rm", "-f", name], stdout=subprocess.DEVNULL,
+            subprocess.run([executable, "rm", "-f", name], stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, timeout=15, check=False)
         except (OSError, subprocess.SubprocessError):
             # Preserve the original failure and make cleanup problems observable.

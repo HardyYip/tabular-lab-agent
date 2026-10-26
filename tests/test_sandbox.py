@@ -43,9 +43,20 @@ def test_docker_boundary_has_no_api_secret_or_eval_labels(task, tmp_path, monkey
 
 
 def test_missing_docker_error_is_actionable(monkeypatch):
+    import tabular_lab.sandbox as sandbox
     monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(sandbox, "_docker_candidates", lambda: [])
     with pytest.raises(RuntimeError, match="V1 needs no Docker"):
         preflight("tabular-lab-worker:0.1.0")
+
+
+def test_new_docker_install_is_found_without_refreshing_parent_path(monkeypatch, tmp_path):
+    import tabular_lab.sandbox as sandbox
+    executable = tmp_path / "docker.exe"
+    executable.write_text("discovery test fixture", encoding="utf-8")
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(sandbox, "_docker_candidates", lambda: [tmp_path / "missing.exe", executable])
+    assert sandbox.docker_executable() == str(executable)
 
 
 @pytest.mark.docker

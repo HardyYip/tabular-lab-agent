@@ -8,8 +8,9 @@ The evaluator owns data splitting, scoring, model selection, and resource limits
 **V2** adds generated Python pipelines inside restricted Docker Linux containers.
 V1 runs on Windows without Docker. CatBoost optionally uses an NVIDIA GPU; other V1 estimators use CPU.
 
-Windows/Linux offline CI and Linux Docker train/export/predict integration have passed. Local V2 use
-still requires Docker Desktop; live DeepSeek experiments have not been executed yet.
+Windows/Linux offline CI, local Windows Docker integration and Linux Docker integration have passed.
+One live DeepSeek V1 run has also completed; multi-seed live comparisons and real LLM-generated V2
+experiments remain pending. Local V2 use requires Docker Desktop with a Linux engine.
 
 This project is under active development. Offline/mock demonstrations are explicitly labeled and do not
 establish the benefit of an LLM. Live DeepSeek comparisons require your own API key.
@@ -194,6 +195,10 @@ service hardened to execute adversarial submissions.
 V2 defaults to CPU containers and does not require GPU passthrough. Docker is currently an optional
 prerequisite; `docker-check` explains missing setup and V1 remains usable. End-to-end V2 and live LLM
 validation must be recorded separately from static/unit checks.
+
+On Windows, the application also checks the standard per-user and all-users Docker Desktop locations
+when `docker` is absent from an older terminal's PATH. Reopen PowerShell if you want to use the bare
+`docker` command directly after installation.
 
 ## Tests and learning
 
