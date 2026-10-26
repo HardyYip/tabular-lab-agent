@@ -1,0 +1,5 @@
+*
+!requirements.txt
+!docker/
+!docker/worker.py
+!docker/Dockerfile

@@ -1,0 +1,6 @@
+# No paid calls. Establish real-data references before configuring DeepSeek.
+tasks: [wine-quality.yaml, adult.yaml]
+seeds: [17, 42, 73]
+strategies: [baseline, random]
+provider: mock
+output_dir: ../runs/benchmark-local

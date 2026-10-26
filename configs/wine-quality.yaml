@@ -1,0 +1,10 @@
+data_path: ../data/wine-quality.csv
+target: quality_class
+metric: macro_f1
+strategy: agent
+seed: 42
+device: auto
+run_dir: ../runs
+llm:
+  provider: deepseek
+  model: deepseek-flash

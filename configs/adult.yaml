@@ -1,0 +1,12 @@
+data_path: ../data/adult-train.csv
+validation_path: ../data/adult-validation.csv
+test_path: ../data/adult-test.csv
+target: income
+metric: macro_f1
+strategy: agent
+seed: 42
+device: auto
+run_dir: ../runs
+llm:
+  provider: deepseek
+  model: deepseek-flash

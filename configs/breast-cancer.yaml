@@ -1,0 +1,4 @@
+data_path: ../data/breast-cancer.csv
+target: target
+llm:
+  provider: mock

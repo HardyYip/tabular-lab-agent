@@ -1,0 +1,5 @@
+tasks: [breast-cancer.yaml, wine.yaml]
+seeds: [17, 42, 73]
+strategies: [baseline, random, agent]
+provider: mock
+output_dir: ../runs/benchmark-offline

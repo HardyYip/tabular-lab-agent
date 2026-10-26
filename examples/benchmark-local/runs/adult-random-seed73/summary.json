@@ -1,0 +1,25 @@
+{
+  "run_id": "20261026T023557Z-c911b927",
+  "strategy": "random",
+  "provider": "mock",
+  "metric": "macro_f1",
+  "stop_reason": "trial_limit",
+  "trials": 8,
+  "failed_trials": 0,
+  "llm_calls": 0,
+  "cost_cny_estimate": 0,
+  "usage_unknown": false,
+  "best_trial": 4,
+  "best_validation": {
+    "accuracy": 0.8298984927714549,
+    "macro_f1": 0.7942638645645561,
+    "roc_auc": 0.9233123780816215
+  },
+  "status": "completed",
+  "test_metrics": {
+    "accuracy": 0.8331183588231681,
+    "macro_f1": 0.7959844490494585,
+    "roc_auc": 0.9263991999165291
+  },
+  "seconds": 75.73499999998603
+}

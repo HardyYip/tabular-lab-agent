@@ -1,0 +1,13 @@
+# Fully offline demonstration; this is NOT a live LLM result.
+data_path: ../data/demo.csv
+target: target
+strategy: agent
+seed: 42
+run_dir: ../runs
+llm:
+  provider: mock
+limits:
+  max_trials: 5
+  max_seconds: 180
+  trial_seconds: 30
+  final_seconds: 30

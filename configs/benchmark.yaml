@@ -1,0 +1,6 @@
+# 2 datasets x 3 seeds x 3 strategies. Live Agent calls consume your API balance.
+tasks: [wine-quality.yaml, adult.yaml]
+seeds: [17, 42, 73]
+strategies: [baseline, random, agent]
+provider: deepseek
+output_dir: ../runs/benchmark

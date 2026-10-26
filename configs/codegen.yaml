@@ -1,0 +1,12 @@
+# Requires `docker build -t tabular-lab-worker:0.1.0 -f docker/Dockerfile .`
+data_path: ../data/demo.csv
+target: target
+strategy: codegen
+llm:
+  provider: deepseek
+  max_output_tokens: 4096
+docker:
+  image: tabular-lab-worker:0.1.0
+  memory: 8g
+  cpus: 4
+  max_repairs: 2

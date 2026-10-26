@@ -1,0 +1,14 @@
+{
+  "dataset": "adult",
+  "official_train_rows": 32561,
+  "train_rows": 26008,
+  "validation_rows": 6502,
+  "official_test_rows": 16281,
+  "source": "https://archive.ics.uci.edu/static/public/2/adult.zip",
+  "archive_sha256": "7537312dd56c2b98035880805ce99e68183a30ee468aa5329d6df0fbb3cc21bb",
+  "license": "CC BY 4.0",
+  "citation": "Becker & Kohavi (1996), https://doi.org/10.24432/C5XW20",
+  "duplicate_policy": "official test unchanged; remove overlapping and repeated development features",
+  "validation_seed": 42,
+  "validation_fraction_of_development": 0.2
+}

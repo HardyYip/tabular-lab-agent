@@ -1,0 +1,11 @@
+{
+  "dataset": "wine-quality",
+  "raw_rows": 6497,
+  "rows": 5320,
+  "archive_sha256": "3ed56667f4b828242bd732d7d1dd7f2861e54432239d7fa63877014cbb0304d4",
+  "source": "https://archive.ics.uci.edu/static/public/186/wine+quality.zip",
+  "license": "CC BY 4.0",
+  "citation": "Cortez et al. (2009), https://doi.org/10.24432/C56S3T",
+  "task": "quality<=5: low; quality==6: medium; quality>=7: high; raw quality removed",
+  "duplicate_policy": "drop exact original rows; group equal feature rows during splitting"
+}

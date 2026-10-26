@@ -1,0 +1,134 @@
+[
+  {
+    "trial": 0,
+    "spec": {
+      "hypothesis": "Majority-class reference.",
+      "model": "dummy",
+      "params": {},
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ff5caf15182ec20009bcac73d0bd118e2ae5dfdfb9f837cee8159012b3ca3913",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.7361111111111112,
+      "macro_f1": 0.424,
+      "roc_auc": 0.5
+    },
+    "seconds": 2.6880000000237487
+  },
+  {
+    "trial": 1,
+    "spec": {
+      "hypothesis": "Linear baseline with training-only preprocessing.",
+      "model": "logistic",
+      "params": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "7e194c7b738d9b085893c5be22c4c75291161a007dd75a3d3579b3d82d04681b",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.8611111111111112,
+      "macro_f1": 0.8074866310160428,
+      "roc_auc": 0.9215491559086395
+    },
+    "seconds": 2.610000000044238
+  },
+  {
+    "trial": 2,
+    "spec": {
+      "hypothesis": "Test nonlinear tree interactions.",
+      "model": "extra_trees",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 8,
+        "min_samples_leaf": 1,
+        "max_features": "sqrt",
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "5fe1657162186416552a42940c575b71ffc1547aa21e70de4ef4776e2a7c7a62",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.9027777777777778,
+      "macro_f1": 0.8561233228661147,
+      "roc_auc": 0.9900695134061569
+    },
+    "seconds": 3.1570000000065193
+  },
+  {
+    "trial": 3,
+    "spec": {
+      "hypothesis": "Test boosted nonlinear interactions.",
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.03,
+        "max_iter": 150,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 0.0,
+        "class_weight": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "51e6c90458e60c65715f91d31c407348ad820046186237f174f808bd4124110e",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.9166666666666666,
+      "macro_f1": 0.8888888888888888,
+      "roc_auc": 0.9046673286991063
+    },
+    "seconds": 2.3589999999967404
+  },
+  {
+    "trial": 4,
+    "spec": {
+      "hypothesis": "Test native categorical boosting.",
+      "model": "catboost",
+      "params": {
+        "iterations": 200,
+        "depth": 4,
+        "learning_rate": 0.1,
+        "l2_leaf_reg": 3.0,
+        "auto_class_weights": null
+      },
+      "preprocessing": {
+        "impute": "median",
+        "scale": true,
+        "min_frequency": 1,
+        "select_percentile": 100
+      }
+    },
+    "fingerprint": "ac7af913641fdb6efa6a7e0c0a52f7e84020ed967c41d3a91aa788e854a29551",
+    "status": "ok",
+    "metrics": {
+      "accuracy": 0.9027777777777778,
+      "macro_f1": 0.8726951250315736,
+      "roc_auc": 0.9592850049652433
+    },
+    "seconds": 12.047000000020489
+  }
+]
