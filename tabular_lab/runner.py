@@ -57,17 +57,23 @@ def _context(dataset, history, task):
                                 if s.fingerprint() not in {h["fingerprint"] for h in history}]}
 
 
-def run_task(task: TaskConfig, output: Path | None = None) -> dict:
+def run_task(task: TaskConfig, output: Path | None = None, *, expected_protocol: dict | None = None) -> dict:
     requested_task = task
     execution_environment = None
     if task.strategy == "codegen":
         from .sandbox import preflight
         execution_environment = preflight(task.docker.image, task.device)
+        if expected_protocol and execution_environment["image_id"] != expected_protocol["image_id"]:
+            raise ValueError("worker image changed since benchmark protocol creation")
         task = task.model_copy(update={"device": execution_environment["device"]})
     start = time.monotonic()
     deadline = start + task.limits.max_seconds
     search_deadline = deadline - min(task.limits.final_seconds, task.limits.max_seconds / 3)
     dataset = load_dataset(task)
+    version = code_version()
+    if expected_protocol and (dataset.hashes != expected_protocol["data_hashes"] or
+                             version["package_source_sha256"] != expected_protocol["package_source_sha256"]):
+        raise ValueError("source or input data changed since benchmark protocol creation")
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     folder = output or task.run_dir / run_id
     folder.mkdir(parents=True, exist_ok=False)
@@ -77,8 +83,8 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
     write_json(folder / "splits.json", {name: getattr(dataset, name).indices
                                         for name in ("train", "validation", "test")})
     versions = {name: importlib.metadata.version(name) for name in
-                ("tabular-lab-agent", "numpy", "pandas", "scikit-learn", "catboost", "pydantic")}
-    write_json(folder / "manifest.json", {**code_version(), "versions": versions,
+                ("tabular-lab-agent", "numpy", "pandas", "scikit-learn", "catboost", "pydantic", "pillow", "httpx")}
+    write_json(folder / "manifest.json", {**version, "versions": versions,
                "data_hashes": dataset.hashes, "seed": task.seed,
                "split_source": dataset.split_source,
                "provider": task.llm.provider, "model": task.llm.model,
@@ -256,6 +262,10 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
                 saved = folder / "trials" / f"{best['trial']:03d}" / "pipeline.joblib"
                 shutil.copy2(saved, model_folder / "pipeline.joblib")
         metadata = {"backend": backend, "columns": dataset.columns, "classes": dataset.classes,
+                    "input_columns": dataset.input_columns, "group_column": task.group_column,
+                    "modalities": task.modalities.model_dump(mode="json"),
+                    "feature_encoding_version": 1,
+                    "max_dense_cells": task.limits.max_dense_cells,
                     "feature_schema": {c: str(dataset.train.X[c].dtype) for c in dataset.columns},
                     "target": task.target, "id_column": task.id_column, "seed": task.seed,
                     "spec": best["spec"], "refit_on_train_validation": final["status"] == "ok",
@@ -289,8 +299,10 @@ def _prediction_csv(predictions, probabilities, metadata, output, ids=None):
     result.to_csv(output, index=False)
 
 
-def predict(model: Path, input_path: Path, output: Path):
+def predict(model: Path, input_path: Path, output: Path, image_root: Path | None = None):
     metadata = read_json(model / "metadata.json")
+    if image_root is not None:
+        metadata.setdefault("modalities", {})["image_root"] = str(image_root.resolve())
     frame, ids = prediction_frame(input_path, metadata)
     if metadata["backend"] == "docker":
         from .sandbox import predict_code

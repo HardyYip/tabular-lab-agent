@@ -23,6 +23,12 @@ replay 不需要网络窗口，但仍预留完整候选训练时间。显式直�
 HTTPX 分别限制连接、读取、写入和连接池等待；浮点 timeout 不是整次请求的总墙钟硬限。
 `ReadTimeout` 表示等待接收数据超时。参见 [HTTPX 官方说明](https://www.python-httpx.org/advanced/timeouts/)。
 
+生产请求现在另由 http_request.post_json 在独立的 spawn 子进程中完成。父进程按总截止等待结果，
+超时就终止子进程，并以 RequestDeadlineExceeded 进入未知用量停止规则。
+响应体最多 1 MB，不跟随重定向；密钥通过进程间参数序列化传递，不写入文件、命令行或日志。
+进程清理有最多两次各 1 秒的 join，系统调度、启动和清理仍可能增加开销，不声称整个 run 严格准点结束。
+本地终止请求不代表远端免费或已取消生成，因此禁止自动重试。
+
 ## 新日志分别回答什么问题
 
 | 事件／字段 | 含义 |
@@ -31,11 +37,12 @@ HTTPX 分别限制连接、读取、写入和连接池等待；浮点 timeout �
 | `llm_request.trial_reserve_seconds` | 给返回方案预留的完整训练窗口 |
 | `llm_request.configured_timeout_seconds` | 任务配置的请求 timeout 上限 |
 | `llm_request.timeout_seconds` | 实际传给 HTTPX 的浮点参数 |
+| `llm_request.total_deadline_enforced` | 默认生产客户端为 true；注入的 mock／自定义客户端为 false |
 | `llm_response.elapsed_seconds` | 从 HTTP 调用前到响应解析与用量校验后的单调时钟耗时 |
 | `llm_usage_unknown.elapsed_seconds` | 从 HTTP 调用前到捕获失败的耗时 |
 | `llm_usage_unknown.http_status` | 已收到响应时的状态码；读取超时且未获得响应对象时为 null |
 
-成功与失败事件通过 `call` 对应请求。耗时不包含密钥读取、费用预留、客户端创建或关闭。
+成功与失败事件通过 `call` 对应请求。生产耗时包含子进程启动、请求和清理，不包含此前的密钥读取与费用预留。
 新增字段不进入 LLM 提示词；日志仍不写入密钥、请求头或原始错误响应。
 replay 读取旧日志时不要求新增字段，也不伪造原调用的网络耗时。
 
@@ -61,12 +68,16 @@ HTTP 错误状态、准入边界、凭据读取后再次检查，以及未知用
 MockTransport 不负责模拟网络 timeout 的自动触发，因此单独的超时测试主动抛出异常。
 这些测试验证控制流，不证明历史请求必然由同一原因触发。
 
+tests/test_http_request.py 另外运行真实本机 HTTP 测试服务器，验证成功请求、慢响应总截止、
+进程清理和响应大小限制；不访问 DeepSeek。默认 CLI 已有主入口保护，使用 Python 脚本直接调用真实规划时，
+应将调用放在 `if __name__ == "__main__":` 下，符合 spawn 的要求。
+参见 [Python 多进程启动说明](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods)。
+
 ## 限制和后续学习
 
 本轮选择完整配置窗口，未新增任意固定秒数。后续可以研究依据历史耗时调整窗口，
-但不能根据测试分数挑选门槛。HTTP 阶段 timeout 仍不是整个请求的总墙钟硬限；
-准入检查、响应后的检查和子进程训练超时共同减少超支，不能声称严格保证整个运行不越过 max_seconds。
-要获得 HTTP 总耗时硬限，需要单独设计可中止执行和未知用量处理。
+但不能根据测试分数挑选门槛。生产 HTTP 已有独立进程总截止；注入的测试／自定义客户端仍由调用方负责总耗时。
+准入检查、HTTP 总截止、响应后的检查和训练子进程超时共同减少超支，整个运行仍可能因启动、清理等越过 max_seconds。
 
 原 Wine Quality 对照结果、冻结协议及未知费用不作改写。修改包源码后，后续实验属于新版本，
 不能作为旧协议下的剩余运行悄悄补入。付费 API 和真实 benchmark 保持暂停。

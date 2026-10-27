@@ -37,6 +37,9 @@ def download_zip(url: str, destination: Path) -> tuple[zipfile.ZipFile, str]:
 
 def prepare(name: str, destination: Path):
     destination.mkdir(parents=True, exist_ok=True)
+    if name in {"image-demo", "multimodal-demo"}:
+        from .multimodal_demo import prepare as prepare_multimodal
+        return prepare_multimodal(name, destination)
     if name in {"demo", "breast-cancer", "wine"}:
         if name == "demo":
             X, y = make_classification(n_samples=360, n_features=8, n_informative=5,

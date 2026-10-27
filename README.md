@@ -8,6 +8,11 @@ The evaluator owns data splitting, scoring, model selection, and resource limits
 **V2** adds generated Python pipelines inside restricted Docker Linux containers.
 V1 runs on Windows without Docker. CatBoost optionally uses an NVIDIA GPU; other V1 estimators use CPU.
 
+Optional local inputs now include image classification, character-hash text classification and mixed
+image/text/tabular features. Fixed descriptors feed the same evaluator and model search; they do not
+provide a vision-language model, OCR or object detection. No pretrained weights or paid service is
+needed for the supplied synthetic examples. See the [multimodal guide](docs/MULTIMODAL.zh-CN.md).
+
 Windows/Linux offline CI, local Windows Docker integration and Linux Docker integration have passed.
 Live DeepSeek V1 experiments and V2 generated pipelines have completed on public datasets. V2 has
 been checked on a synthetic demo, Wine Quality and Adult, including reloading exported models in new
@@ -307,8 +312,9 @@ The current working tree adds full-window planning admission, untried canonical 
 rejection feedback, and bounded custom-member runtime audits. See the Chinese
 [implementation walkthrough](docs/ENGINEERING_HARDENING.zh-CN.md) and [validation status](docs/VALIDATION.md).
 The historical counts below describe the 0.2.0 release; they are not the latest working-tree totals.
-The latest local working-tree run passed **103 tests with no skips**: 93 offline and ten actual Docker
-tests, including two GPU cases. This is local verification; check GitHub Actions for the published commit's CI status.
+The latest local verification passed **136 distinct tests with no skips**, executed in two disjoint groups:
+125 offline and eleven actual Docker tests, including two GPU cases. This is local verification; check
+GitHub Actions for the published commit's CI status. See the [delivery walkthrough](docs/EXTENDED_INPUTS_DELIVERY.zh-CN.md).
 
 Recorded local Windows verification: **49 passed, 0 skipped** (45 offline tests and four actual Docker
 integration tests). A separate Linux container passed all **45 offline tests**. Docker coverage includes
@@ -330,6 +336,21 @@ Start with the Chinese [learning guide](docs/LEARNING.zh-CN.md), [architecture](
 [dataset roadmap](docs/DATASETS.md), and [AI usage statement](docs/AI_USAGE.md).
 The next guided session is outlined in [the Chinese code-reading plan](docs/NEXT_SESSION.zh-CN.md).
 See the [four-stage acceptance record](docs/ACCEPTANCE.zh-CN.md) and [release notes](CHANGELOG.md).
+
+New offline entry points:
+
+```powershell
+.\.venv\Scripts\python.exe -m tabular_lab prepare --dataset image-demo
+.\.venv\Scripts\python.exe -m tabular_lab run --task configs/image-demo.yaml
+.\.venv\Scripts\python.exe -m tabular_lab prepare --dataset multimodal-demo
+.\.venv\Scripts\python.exe -m tabular_lab inspect --task configs/multimodal-demo.yaml
+.\.venv\Scripts\python.exe -m tabular_lab run --task configs/multimodal-demo.yaml
+```
+
+Benchmark outputs are protected against accidental overwrites. A read-only `benchmark --dry-run`
+previews configured runs, and `--resume` checks the frozen source/data/environment/image protocol,
+skips saved runs and refuses incomplete or unknown-usage work. See the
+[resume guide](docs/BENCHMARK_RESUME.zh-CN.md). Real API calls and the old V1/V2 comparison remain paused.
 
 ## License
 

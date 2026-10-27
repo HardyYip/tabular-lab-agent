@@ -105,8 +105,6 @@ class JSONClient:
         payload = {"model": self.config.model, "messages": messages,
                    "max_tokens": self.config.max_output_tokens,
                    "response_format": {"type": "json_object"}, "thinking": {"type": "disabled"}}
-        own_client = self.client is None
-        client = self.client or httpx.Client()
         started = time.monotonic()
         http_status = None
         try:
@@ -116,12 +114,17 @@ class JSONClient:
                                    "model": self.config.model, "reservation_cny": reservation,
                                    "available_seconds": available,
                                    "trial_reserve_seconds": reserve_seconds,
+                                   "total_deadline_enforced": self.client is None,
                                    "configured_timeout_seconds": self.config.timeout_seconds,
                                    "timeout_seconds": request_timeout, "messages": messages})
             started = time.monotonic()
-            response = client.post("https://api.deepseek.com/chat/completions", json=payload,
-                                   headers={"Authorization": f"Bearer {key}"},
-                                   timeout=request_timeout)
+            url = "https://api.deepseek.com/chat/completions"
+            if self.client is not None:
+                response = self.client.post(url, json=payload, headers={"Authorization": f"Bearer {key}"},
+                                            timeout=request_timeout)
+            else:
+                from .http_request import post_json
+                response = post_json(url, payload, key, request_timeout)
             http_status = response.status_code
             # HTTP rejections do not expose a reliable usage record; stop conservatively.
             response.raise_for_status()
@@ -151,9 +154,6 @@ class JSONClient:
                                    "error_type": type(exc).__name__, "reserved_cny": reservation,
                                    "http_status": http_status, "elapsed_seconds": time.monotonic() - started})
             raise StopRun(f"API call failed or usage unknown ({type(exc).__name__}); inspect logs") from exc
-        finally:
-            if own_client:
-                client.close()
         if self.spent > self.budget:
             raise StopRun("actual recorded usage exceeded budget estimate; further calls stopped")
         try:
@@ -184,6 +184,8 @@ def code_prompt() -> str:
         "Implement build_pipeline(seed: int, feature_schema: dict) returning an sklearn-compatible pipeline "
         "with fit(X,y), predict(X), predict_proba(X), classes_. Inputs are pandas DataFrames. "
         "Only numpy, pandas, scipy, sklearn, catboost and standard-library modules are installed. "
+        "Some numeric columns are stateless text-hash or image-descriptor features, indicated by "
+        "training_profile.modalities. Original media files and raw text are not provided. "
         "Do not read files, access labels outside fit, run commands, use network or install packages. "
         "All preprocessing must be fitted inside the returned pipeline. Respect execution_limits.cpus. "
         "GPU access is available only when execution_limits.gpu_enabled is true; CPU estimators remain allowed. "

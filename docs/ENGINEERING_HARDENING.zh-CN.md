@@ -14,8 +14,9 @@
 请求返回后还会重新检查训练时间，避免启动被迫缩短的候选训练。
 
 代价是搜索可能更早结束。这里采用已有配置的完整窗口，没有根据测试分数挑选阈值。
-HTTPX 的阶段 timeout 不等于整个请求的总耗时硬限，所以仍保留响应后的检查与子进程超时，
-不声称整个运行严格不超过 max_seconds。详见 [请求计时](REQUEST_TIMING.zh-CN.md)。
+HTTPX 的阶段 timeout 不等于整个请求的总耗时硬限。后续已增加独立 HTTP 进程的总截止，
+仍保留响应后的检查与训练子进程超时，不声称整个运行严格不超过 max_seconds。
+详见 [请求计时](REQUEST_TIMING.zh-CN.md)。
 
 阅读顺序：`runner.py` 的 `search_deadline` → `llm.py` 的 `_window()` → `trial_time_stop`。
 对应测试：`test_deadline_requires_full_request_and_training_window` 和
@@ -65,7 +66,8 @@ worker 发现嵌套成员中可识别、未经验证的 CatBoost 早停时也会
 `runs/engineering-hardening-20261027/`。容器测试可用 `TABULAR_LAB_TEST_IMAGE` 选择独立镜像，
 GPU 测试仍需 `TABULAR_LAB_GPU_TESTS=1`；临时变量在验证结束后恢复。
 
-最终同一次测试共 103 项通过、无跳过：93 项离线、10 项实际 Docker（其中 2 项 GPU）。
+本节对应早一阶段的同一次测试：103 项通过、无跳过，93 项离线、10 项实际 Docker（其中 2 项 GPU）。
+最新扩展验证见 [验证状态](VALIDATION.md)。
 本机默认 worker 标签已指向验证过的新镜像，旧镜像另有 comparison-20261027 保留标签，
 已有模型依旧通过原不可变 image ID 加载。
 

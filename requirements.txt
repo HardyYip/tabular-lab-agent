@@ -68,7 +68,9 @@ pandas==2.3.3
     #   tabular-lab-agent (pyproject.toml)
     #   catboost
 pillow==13.0.0
-    # via matplotlib
+    # via
+    #   matplotlib
+    #   tabular-lab-agent (pyproject.toml)
 plotly==7.1.0
     # via catboost
 psutil==7.2.2

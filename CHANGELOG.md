@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded, stateless local image descriptors and character-hash text features for mixed classification,
+  raw-schema-aware exported prediction, input-asset fingerprints and outer image/subject grouping.
+- Protect benchmark outputs with a process lock, atomic checkpoints, protocol-checked resume and read-only
+  planning; never retry an unfinished or unknown-usage run automatically.
+- Bound production HTTP with a separate-process total deadline, response-size cap and conservative usage
+  handling; test with a real loopback slow-response server without any external API call.
 - Reserve complete request and candidate-training windows before live planning; recheck time after setup
   and before training, and retain detailed timeout, elapsed-time and error-status evidence.
 - Offer untried canonical candidate IDs and bounded rejection feedback to V1; retain legacy specs,

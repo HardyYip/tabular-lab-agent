@@ -8,7 +8,7 @@ import typer
 
 from .config import load_task
 
-app = typer.Typer(no_args_is_help=True, help="Reproducible, budget-aware tabular classification experiments.")
+app = typer.Typer(no_args_is_help=True, help="Budget-aware tabular, image, text and mixed classification experiments.")
 auth = typer.Typer(no_args_is_help=True, help="Manage local DeepSeek credentials without making API calls.")
 app.add_typer(auth, name="auth")
 
@@ -87,11 +87,12 @@ def run(task: Annotated[Path, typer.Option(exists=True)],
 @app.command()
 def predict(model: Annotated[Path, typer.Option(exists=True)],
             input: Annotated[Path, typer.Option(exists=True)],
-            output: Annotated[Path, typer.Option()]):
+            output: Annotated[Path, typer.Option()],
+            image_root: Annotated[Path | None, typer.Option(exists=True, file_okay=False)] = None):
     """Predict with an exported model; no LLM or API key is needed."""
     from .runner import predict as predict_rows
     try:
-        rows = predict_rows(model.resolve(), input, output)
+        rows = predict_rows(model.resolve(), input, output, image_root=image_root)
         typer.echo(f"Wrote {rows} predictions to {output}")
     except (ValueError, RuntimeError, FileNotFoundError) as exc:
         typer.echo(f"Error: {exc}", err=True)
@@ -101,18 +102,43 @@ def predict(model: Annotated[Path, typer.Option(exists=True)],
 @app.command()
 def prepare(dataset: Annotated[str, typer.Option()] = "demo",
             output: Annotated[Path, typer.Option()] = Path("data")):
-    """Prepare demo, breast-cancer, wine, wine-quality, adult, or all datasets."""
+    """Prepare demo, image-demo, multimodal-demo, public tabular datasets, or all tabular datasets."""
     from .datasets import prepare as prepare_data
     names = ["demo", "breast-cancer", "wine", "wine-quality", "adult"] if dataset == "all" else [dataset]
     for name in names:
         typer.echo(json.dumps(prepare_data(name, output), ensure_ascii=False, indent=2))
 
 
+@app.command("inspect")
+def inspect_task(task: Annotated[Path, typer.Option(exists=True)]):
+    """Inspect local input boundaries, splits and training-only features without an API call."""
+    from .data import load_dataset
+    try:
+        data = load_dataset(load_task(task))
+        result = {"new_api_requests": 0, "input_columns": data.input_columns,
+                  "encoded_feature_count": len(data.columns), "split_source": data.split_source,
+                  "split_rows": {name: len(getattr(data, name).y) for name in ("train", "validation", "test")},
+                  "data_hashes": data.hashes, "training_profile": data.profile}
+        typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    except (ValueError, RuntimeError, FileNotFoundError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+
 @app.command()
-def benchmark(suite: Annotated[Path, typer.Option(exists=True)]):
+def benchmark(suite: Annotated[Path, typer.Option(exists=True)],
+              resume: Annotated[bool, typer.Option()] = False,
+              dry_run: Annotated[bool, typer.Option()] = False):
     """Compare fixed baselines, random search and agent with matching limits."""
-    from .benchmark import run_benchmark
-    typer.echo(str(run_benchmark(suite)))
+    from .benchmark import plan_benchmark, run_benchmark
+    try:
+        if dry_run:
+            typer.echo(json.dumps(plan_benchmark(suite), ensure_ascii=False, indent=2))
+        else:
+            typer.echo(str(run_benchmark(suite, resume=resume)))
+    except (ValueError, RuntimeError, FileNotFoundError, FileExistsError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from exc
 
 
 @app.command()

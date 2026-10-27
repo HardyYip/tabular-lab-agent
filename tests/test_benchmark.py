@@ -9,7 +9,7 @@ def test_unknown_api_usage_stops_entire_suite_after_saving_partial_result(task, 
     calls = []
     monkeypatch.setattr(benchmark, "load_task", lambda path: task.model_copy(deep=True))
 
-    def run(config):
+    def run(config, output=None, **kwargs):
         calls.append(config.seed)
         return {"status": "partial", "path": "private-run", "seconds": 1, "trials": 2,
                 "failed_trials": 0, "cost_cny_estimate": 0, "llm_calls": 1,
@@ -32,8 +32,9 @@ def test_paired_comparison_alternates_order_and_preserves_limits(task, tmp_path,
     task.llm.provider = "deepseek"
     calls = []
     monkeypatch.setattr(benchmark, "load_task", lambda path: task.model_copy(deep=True))
+    monkeypatch.setattr(benchmark, "_images", lambda plans: {})
 
-    def run(config):
+    def run(config, output=None, **kwargs):
         calls.append((config.seed, config.strategy, config.limits.model_dump()))
         return {"status": "completed", "path": "fixture-run", "seconds": 1, "trials": 2,
                 "failed_trials": 0, "cost_cny_estimate": 0, "llm_calls": 0,

@@ -115,10 +115,29 @@ class DockerConfig(StrictModel):
     max_repairs: int = Field(default=2, ge=0, le=2)
 
 
+class Modalities(StrictModel):
+    text_columns: list[str] = Field(default_factory=list, max_length=16)
+    image_columns: list[str] = Field(default_factory=list, max_length=4)
+    image_root: Path | None = None
+    image_size: int = Field(default=16, ge=8, le=64)
+    text_features: int = Field(default=256, ge=16, le=4096)
+    max_text_chars: int = Field(default=20_000, ge=256, le=100_000)
+    max_image_bytes: int = Field(default=10_000_000, ge=1024, le=50_000_000)
+    max_image_pixels: int = Field(default=20_000_000, ge=64, le=50_000_000)
+
+    @model_validator(mode="after")
+    def distinct_columns(self):
+        columns = self.text_columns + self.image_columns
+        if any(not name.strip() for name in columns) or len(set(columns)) != len(columns):
+            raise ValueError("modality columns must be nonempty, unique and disjoint")
+        return self
+
+
 class TaskConfig(StrictModel):
     data_path: Path
     target: str
     id_column: str | None = None
+    group_column: str | None = None
     validation_path: Path | None = None
     test_path: Path | None = None
     metric: Literal["macro_f1", "accuracy", "roc_auc"] = "macro_f1"
@@ -129,6 +148,7 @@ class TaskConfig(StrictModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     limits: Limits = Field(default_factory=Limits)
     docker: DockerConfig = Field(default_factory=DockerConfig)
+    modalities: Modalities = Field(default_factory=Modalities)
 
     @model_validator(mode="after")
     def split_contract(self):
@@ -136,6 +156,11 @@ class TaskConfig(StrictModel):
             raise ValueError("provide both validation_path and test_path, or neither")
         if self.id_column == self.target:
             raise ValueError("id_column cannot be target")
+        if self.group_column and self.group_column in {self.target, self.id_column}:
+            raise ValueError("group_column cannot be the target or ID column")
+        if {self.target, self.id_column, self.group_column} & set(
+                self.modalities.text_columns + self.modalities.image_columns):
+            raise ValueError("modality columns cannot be target, ID or group columns")
         if self.strategy == "codegen" and self.llm.provider == "mock":
             raise ValueError("codegen requires deepseek or replay, not mock")
         return self
@@ -150,4 +175,6 @@ def load_task(path: Path) -> TaskConfig:
             setattr(task, key, (path.parent / value).resolve())
     if task.llm.replay_path:
         task.llm.replay_path = (path.parent / task.llm.replay_path).resolve()
+    if task.modalities.image_root is not None:
+        task.modalities.image_root = (path.parent / task.modalities.image_root).resolve()
     return task

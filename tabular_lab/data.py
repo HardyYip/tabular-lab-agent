@@ -41,6 +41,7 @@ class Dataset:
     hashes: dict[str, str]
     profile: dict
     split_source: str
+    input_columns: list[str]
 
 
 def _read(path: Path, task: TaskConfig, encoder=None):
@@ -57,19 +58,30 @@ def _read(path: Path, task: TaskConfig, encoder=None):
     labels = frame[task.target].astype(str)
     encoder = encoder or LabelEncoder().fit(labels)
     y = encoder.transform(labels)
-    X = clean_features(frame.drop(columns=[task.target] + ([task.id_column] if task.id_column else [])))
+    group_values = None
+    if task.group_column:
+        if task.group_column not in frame or frame[task.group_column].isna().any():
+            raise ValueError("group_column is missing or contains missing values")
+        group_values = frame[task.group_column].astype(str).tolist()
+    features = frame.drop(columns=[name for name in (task.target, task.id_column, task.group_column) if name])
+    from .features import encode_features
+    X, assets, asset_hash = encode_features(features, task.modalities, path.parent, task.limits.max_dense_cells)
+    X = clean_features(X)
     if not len(X.columns) or X.columns.duplicated().any():
         raise ValueError("at least one unique feature column is required")
-    return X, y, ids, encoder
+    return X, y, ids, encoder, {"groups": group_values, "assets": assets, "asset_hash": asset_hash,
+                               "input_columns": features.columns.tolist()}
 
 
 def load_dataset(task: TaskConfig) -> Dataset:
-    X, y, ids, encoder = _read(task.data_path, task)
+    X, y, ids, encoder, info = _read(task.data_path, task)
     if len(encoder.classes_) < 2:
         raise ValueError("classification requires at least two classes")
     if task.metric == "roc_auc" and len(encoder.classes_) != 2:
         raise ValueError("roc_auc is supported only for binary tasks")
     hashes = {"data": hashlib.sha256(task.data_path.read_bytes()).hexdigest()}
+    if info["asset_hash"]:
+        hashes["data_assets"] = info["asset_hash"]
 
     def subset(indices):
         return Split(X.iloc[indices].reset_index(drop=True), y[indices], indices.tolist(),
@@ -79,26 +91,40 @@ def load_dataset(task: TaskConfig) -> Dataset:
         split_source = "external CSV files"
         train = subset(np.arange(len(X)))
         external = []
+        infos = [info]
         for key, path in (("validation", task.validation_path), ("test", task.test_path)):
-            other_X, other_y, other_ids, _ = _read(path, task, encoder)
+            other_X, other_y, other_ids, _, other_info = _read(path, task, encoder)
             if set(other_X.columns) != set(X.columns):
                 raise ValueError(f"{key} feature columns differ from training columns")
             external.append(Split(other_X[X.columns], other_y, list(range(len(other_X))), other_ids))
             hashes[key] = hashlib.sha256(path.read_bytes()).hexdigest()
+            if other_info["asset_hash"]:
+                hashes[key + "_assets"] = other_info["asset_hash"]
+            infos.append(other_info)
         validation, test = external
         feature_groups = [set(pd.util.hash_pandas_object(s.X, index=False).tolist())
                           for s in (train, validation, test)]
         if any(feature_groups[i] & feature_groups[j] for i, j in ((0, 1), (0, 2), (1, 2))):
             raise ValueError("external splits contain overlapping feature rows; prepare disjoint data first")
+        for key in ("assets", "groups"):
+            groups = [set(value for row in item[key] for value in row) if key == "assets" else
+                      set(item[key] or []) for item in infos]
+            if any(groups[i] & groups[j] for i, j in ((0, 1), (0, 2), (1, 2))):
+                raise ValueError("external splits contain overlapping image content or group IDs")
     else:
         try:
             groups = pd.util.hash_pandas_object(X, index=False).to_numpy()
+            if task.group_column or task.modalities.image_columns:
+                from .features import split_groups
+                groups = split_groups(X, info["groups"], info["assets"])
             if len(np.unique(groups)) != len(groups):
                 splitter = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=task.seed)
                 folds = [held for _, held in splitter.split(X, y, groups)]
                 test_idx, val_idx = folds[0], folds[1]
                 train_idx = np.concatenate(folds[2:])
                 split_source = "stratified feature-group folds, approximately 60/20/20"
+                if task.group_column or task.modalities.image_columns:
+                    split_source = "stratified feature/image/subject-group folds, approximately 60/20/20"
             else:
                 development, test_idx = train_test_split(np.arange(len(X)), test_size=0.2,
                                                          stratify=y, random_state=task.seed)
@@ -125,8 +151,12 @@ def load_dataset(task: TaskConfig) -> Dataset:
     profile = {"training_rows": len(train.X), "feature_count": len(X.columns),
                "class_count": len(encoder.classes_), "class_counts": np.bincount(train.y).tolist(),
                "columns": columns}
+    if task.modalities.text_columns or task.modalities.image_columns:
+        profile["modalities"] = {"text_columns": len(task.modalities.text_columns),
+                                 "image_columns": len(task.modalities.image_columns),
+                                 "encoding": "stateless character hashing and image descriptors v1"}
     return Dataset(train, validation, test, X.columns.tolist(), encoder.classes_.tolist(), hashes,
-                   profile, split_source)
+                   profile, split_source, info["input_columns"])
 
 
 def prediction_frame(path: Path, metadata: dict):
@@ -137,10 +167,19 @@ def prediction_frame(path: Path, metadata: dict):
         if id_col not in frame:
             raise ValueError(f"missing ID column: {id_col}")
         ids = frame[id_col].copy()
-    features = frame.drop(columns=[c for c in (metadata.get("target"), metadata.get("id_column"))
+    features = frame.drop(columns=[c for c in (metadata.get("target"), metadata.get("id_column"),
+                                              metadata.get("group_column"))
                                   if c and c in frame])
-    missing = set(metadata["columns"]) - set(features.columns)
-    extra = set(features.columns) - set(metadata["columns"])
+    input_columns = metadata.get("input_columns", metadata["columns"])
+    missing = set(input_columns) - set(features.columns)
+    extra = set(features.columns) - set(input_columns)
     if missing or extra:
         raise ValueError(f"feature schema mismatch; missing={sorted(missing)}, extra={sorted(extra)}")
+    if metadata.get("modalities"):
+        if metadata.get("feature_encoding_version", 1) != 1:
+            raise ValueError("unsupported saved feature encoding version")
+        from .config import Modalities
+        from .features import encode_features
+        features, _, _ = encode_features(features[input_columns], Modalities.model_validate(metadata["modalities"]),
+                                         path.parent, metadata.get("max_dense_cells", 20_000_000))
     return clean_features(features[metadata["columns"]]), ids

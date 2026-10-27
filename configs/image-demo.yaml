@@ -1,0 +1,10 @@
+data_path: ../data/image-demo.csv
+target: target
+strategy: baseline
+modalities:
+  image_columns: [image]
+limits:
+  max_trials: 2
+  max_seconds: 180
+  trial_seconds: 30
+  final_seconds: 30

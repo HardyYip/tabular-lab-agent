@@ -1,0 +1,14 @@
+data_path: ../data/multimodal-demo.csv
+target: target
+strategy: agent
+llm:
+  provider: mock
+modalities:
+  image_columns: [image]
+  text_columns: [caption]
+  text_features: 256
+limits:
+  max_trials: 4
+  max_seconds: 180
+  trial_seconds: 30
+  final_seconds: 30

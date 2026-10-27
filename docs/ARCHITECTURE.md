@@ -4,6 +4,18 @@ The task contract is YAML validated by Pydantic. CSV paths resolve relative to t
 are revalidated together. The profile describes **training data only**. Integer class encoding and
 feature ordering are fixed by the evaluator, not the planner.
 
+## Optional local media inputs
+
+Explicit modality columns are deterministically encoded before splitting and profiling. Character hashes
+learn no vocabulary/IDF; bounded image descriptors use only each image's own pixels. Raw media/text columns
+are removed, and learned imputation/scaling remains inside the fit pipeline. Raw input schema and encoding
+version are exported for prediction. Legacy tabular bundles retain their existing path.
+
+Image bytes/pixels, path roots, text length and encoded feature cells are bounded. Exact decoded image
+content and optional subject IDs define outer disjoint groups; subject grouping is not claimed for the
+helper's internal holdout. CSV/image fingerprints enter manifests and resume protocols. Generated workers
+receive encoded features rather than original media files, and the planner receives training summaries.
+
 ## V1
 
 `runner` owns the state machine: baselines → proposal → validation → bounded worker → feedback →
@@ -82,8 +94,15 @@ integrity over availability. Validly billed but malformed JSON can be retried wi
 Live planning requires the full configured HTTP timeout plus one full trial window to remain before the
 search deadline. The finalization reserve is outside that deadline. The HTTP client rechecks after setup;
 the runner rechecks the trial window after receiving a plan. Normal time admission stops do not become
-unknown usage or planning failures. HTTPX phase timeouts are not a strict total request deadline. Timing
-events record fresh availability, configured/effective timeout, elapsed time and available error status.
+unknown usage or planning failures. Default production HTTP runs in a separate spawned process with a
+total wait deadline, a bounded response and no redirects. Timeouts terminate it and retain unknown usage;
+startup/cleanup overhead still exists, and local termination does not imply free or cancelled server work.
+Injected test/custom clients retain phase timeouts. Events record which path enforces the total deadline.
+
+Benchmark output directories are locked and protected against overwrite. Resume compares source,
+configuration/order, input assets, environment and immutable image IDs, then verifies saved runs. A completed
+orphan can be recovered with unknown outer wall time; unfinished or unknown-usage runs are never retried
+automatically. Atomic JSON is the authoritative checkpoint and CSV summaries are replaceable derivatives.
 
 Reproducibility has two levels: replay the recorded decisions, or rerun live planning. Only the former
 fixes the decision sequence. Record code dirty state, versions, data hashes, seed, device and pricing;

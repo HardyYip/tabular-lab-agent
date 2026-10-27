@@ -44,6 +44,8 @@ Windows 使用 `python -m tabular_lab auth login` 首次保存密钥，以后自
 阅读 [请求计时与离线复现](REQUEST_TIMING.zh-CN.md)，沿 `runner.run_task()` → `JSONClient.ask()`
 查看时间如何传递，再运行对应离线测试。模拟异常能验证控制流，历史失败的根因仍需要当时的证据。
 后续三项改进的完整导读见 [截止控制、候选反馈与集成审计](ENGINEERING_HARDENING.zh-CN.md)。
+之后可读 [安全断点恢复](BENCHMARK_RESUME.zh-CN.md) 和 [离线多模态入口](MULTIMODAL.zh-CN.md)：
+前者讨论如何避免重复执行付费工作，后者讨论无状态特征与可学习预处理的区别。
 
 ## 第四步：判断 Agent 是否有效
 
@@ -60,5 +62,6 @@ Windows 使用 `python -m tabular_lab auth login` 首次保存密钥，以后自
 阅读 `sandbox.py` 和 `docker/worker.py`：模型代码能看到什么？验证标签放在哪里？
 为什么生成的 joblib 只能在容器内加载？为什么杀死 Docker CLI 后还要删除容器？
 
-V2 先使用 CPU 容器；5070 的本机 GPU 训练属于 V1 的 CatBoost 路径，两者无需一起配置。
+V2 可选择 cpu、auto 或 gpu；V1 本机 CatBoost 与 V2 容器的 GPU 访问分别检查，
+配置方法见 [GPU 导读](V2_GPU.zh-CN.md)。
 通过真实容器集成测试后，才能把 V2 标为本机验证通过。

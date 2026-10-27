@@ -1,6 +1,36 @@
 # Validation status (2026-10-27)
 
-## Latest local working tree (unreleased)
+## Latest extended-input and reliability verification (unreleased)
+
+Two disjoint local test groups passed without skips: **125 offline tests** in 154.55 seconds and **11 actual
+Docker tests** in 112.57 seconds, including two opt-in GPU cases. This is 136 distinct tests, not a sum of
+repeated earlier passes. Offline HTTP tests use a loopback server or mocked responses, never DeepSeek.
+`ruff check .` and `git diff --check` pass. No new paid API or real benchmark run was made.
+
+Coverage adds safe benchmark resume, atomic checkpoint derivatives and locks, input/source/image checks
+before execution, total HTTP deadlines and response-size limits, image/text feature boundaries, outer
+image/subject grouping, and native/container exports from raw media CSVs.
+
+Two fixed-seed synthetic demos completed with provider=mock: image-only (409 encoded features, two trials)
+and mixed inputs (668 features, four trials). Both had test macro-F1 1.0 and twelve fresh-process predictions.
+These are functional examples, not evidence of natural-image or LLM generalization. Existing V1/V2 exports
+were also rechecked in fresh processes: 1,064 rows each, identical labels and probability maximum difference 0.
+Original comparison protocol, results and audit hashes remain unchanged.
+
+The default worker and `tabular-lab-worker:extended-inputs` now resolve to
+`sha256:eef08608ab8d7c81f13d5475254bb785ba6d27d6b62f5a6807538d81c9157b91`. Earlier hardening and comparison
+images remain under their preservation tags. The current package-source SHA-256 is
+`638985e47d4be0b784ef0906dfcf6a1f27d901e5d5a1411ea60c0a7ec36201ac`.
+Evidence is in the ignored `runs/extended-input-validation/`: offline.xml, docker.xml, validation.json,
+offline-demo-acceptance.json and legacy-export-check/verification.json.
+
+The earlier published hardening commit [509c389](https://github.com/HardyYip/tabular-lab-agent/commit/509c389ec322d37350e0d4af2667e0031ef78614)
+passed [Windows, Ubuntu and Docker CI](https://github.com/HardyYip/tabular-lab-agent/actions/runs/40539104702).
+For later commits, consult their own GitHub Actions checks; earlier CI results do not validate new changes.
+See the [delivery walkthrough](EXTENDED_INPUTS_DELIVERY.zh-CN.md), [media guide](MULTIMODAL.zh-CN.md)
+and [resume guide](BENCHMARK_RESUME.zh-CN.md).
+
+## Earlier hardening local evidence (509c389)
 
 The final local suite passed **103 tests, 0 skipped** in 262.43 seconds: 93 offline tests and ten actual
 Docker tests, including two opt-in GPU cases. HTTP planning tests use MockTransport/replay and isolated
@@ -13,7 +43,8 @@ nested early-stopping rejection, actual container final refitting and exported p
 See the [implementation walkthrough](ENGINEERING_HARDENING.zh-CN.md).
 
 The final worker ID is `sha256:1853dab9dfce2c1d98d5d8bef186927bc4ae59e1ad2dc433253ab8e6d76d39f5`.
-Both `tabular-lab-worker:engineering-20261027` and the local default `tabular-lab-worker:0.1.0` resolve to it.
+At that verification, both `tabular-lab-worker:engineering-20261027` and the local default resolved to it.
+The default has since advanced; historical exports continue to use their saved immutable IDs.
 The comparison worker `sha256:5b140f7aff310bcb462b073352f53506207b0d644436d98ad6c5a68e2bbeaf4e` remains
 available under `tabular-lab-worker:comparison-20261027`; historical exports still reference that immutable ID.
 The new package-source SHA-256 is `a1795f2e32df27ac4dec135b0a7f5ed631cdb3e05bdf1583b5f186f910f4407a`.
@@ -25,8 +56,9 @@ the standard Docker build succeeded using cached dependencies before final conta
 
 The incomplete Wine Quality comparison remains two partial runs with one unknown API usage. Its frozen
 protocol, result ledger and audit were not rewritten. The current source cannot be treated as that protocol.
-Live planning still uses HTTPX phase timeouts rather than a strict total HTTP deadline; supported runtime
-traversal cannot prove complete coverage of arbitrary generated Python wrappers.
+At that stage, live planning still used only HTTPX phase timeouts; the latest default client now adds
+an isolated-process total deadline. Supported runtime traversal still cannot prove complete coverage of
+arbitrary generated Python wrappers.
 
 ## v0.2.0 release evidence
 
