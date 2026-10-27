@@ -1,0 +1,7 @@
+tasks:
+  - comparison-wine-quality.yaml
+seeds: [17, 42, 73]
+strategies: [agent, codegen]
+alternate_strategy_order: true
+provider: deepseek
+output_dir: ../runs/comparison-v1-v2-hardened-20261027

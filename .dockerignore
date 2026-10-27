@@ -3,3 +3,9 @@
 !docker/
 !docker/worker.py
 !docker/Dockerfile
+!tabular_lab/
+!tabular_lab/__init__.py
+!tabular_lab/config.py
+!tabular_lab/models.py
+!tabular_lab/early_stopping.py
+!tabular_lab/runtime.py

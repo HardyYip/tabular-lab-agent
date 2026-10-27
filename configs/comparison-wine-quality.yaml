@@ -1,0 +1,25 @@
+data_path: ../data/wine-quality.csv
+target: quality_class
+metric: macro_f1
+device: auto
+llm:
+  provider: deepseek
+  model: deepseek-flash
+  max_output_tokens: 4096
+  pricing:
+    input_usd_per_million: 0.30
+    output_usd_per_million: 1.20
+    usd_to_cny: 7.20
+    snapshot_date: '2026-10-27'
+limits:
+  budget_cny: 1
+  max_trials: 100
+  max_seconds: 600
+  trial_seconds: 120
+  final_seconds: 120
+  max_workers: 4
+docker:
+  image: tabular-lab-worker:0.1.0
+  cpus: 4
+  memory: 8g
+  max_repairs: 2

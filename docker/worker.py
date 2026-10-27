@@ -9,7 +9,13 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from tabular_lab.runtime import inspect_model
+
 INPUT, OUTPUT = Path("/input"), Path("/output")
+
+
+class UnverifiedEarlyStoppingError(ValueError):
+    pass
 
 
 def main():
@@ -25,9 +31,13 @@ def main():
             if dtype == "object":
                 X[col] = X[col].map(lambda v: str(v) if pd.notna(v) else np.nan)
         model.fit(X, np.load(INPUT / "train_labels.npy", allow_pickle=False))
+        runtime = inspect_model(model)
+        if any(entry["early_stopping_status"] == "unverified" for entry in runtime["estimators"]):
+            raise UnverifiedEarlyStoppingError("Use tabular_lab.early_stopping.EarlyStoppingCatBoost")
         joblib.dump(model, OUTPUT / "pipeline.joblib")
     else:
         model = joblib.load(INPUT / "pipeline.joblib")
+        runtime = inspect_model(model)
     X_eval = pd.read_csv(INPUT / "eval.csv")
     for col, dtype in config.get("feature_schema", {}).items():
         if dtype == "object":
@@ -39,6 +49,7 @@ def main():
         raise ValueError("invalid model classes")
     probabilities = probabilities[:, np.argsort(classes)]
     np.savez(OUTPUT / "predictions.npz", predictions=predictions, probabilities=probabilities)
+    (OUTPUT / "runtime.json").write_text(json.dumps(runtime, allow_nan=False))
 
 
 if __name__ == "__main__":

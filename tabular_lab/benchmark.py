@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import time
 from pathlib import Path
 
 import yaml
@@ -18,8 +19,11 @@ def run_benchmark(suite_path: Path):
     rows = []
     # Never compare test scores while proposing experiments; each run sees only its validation split.
     for task_file in suite["tasks"]:
-        for seed in suite.get("seeds", [17, 42, 73]):
-            for strategy in suite.get("strategies", ["baseline", "random", "agent"]):
+        for seed_index, seed in enumerate(suite.get("seeds", [17, 42, 73])):
+            strategies = list(suite.get("strategies", ["baseline", "random", "agent"]))
+            if suite.get("alternate_strategy_order") and seed_index % 2:
+                strategies.reverse()
+            for strategy in strategies:
                 task = load_task(suite_path.parent / task_file)
                 task.seed, task.strategy = seed, strategy
                 task.run_dir = output
@@ -29,10 +33,13 @@ def run_benchmark(suite_path: Path):
                     label = "offline_mock_agent"
                 else:
                     label = strategy
+                started = time.monotonic()
                 summary = run_task(task)
+                wall_seconds = time.monotonic() - started
                 row = {"task": Path(task_file).stem, "seed": seed, "strategy": label,
                        "status": summary["status"], "run_path": summary["path"],
                        "seconds": summary["seconds"], "trials": summary["trials"],
+                       "wall_seconds": wall_seconds,
                        "failed_trials": summary["failed_trials"], "cost_cny_estimate": summary["cost_cny_estimate"],
                        "usage_unknown": summary.get("usage_unknown", False),
                        "llm_calls": summary["llm_calls"], "stop_reason": summary["stop_reason"],

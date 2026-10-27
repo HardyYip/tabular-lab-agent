@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Reserve complete request and candidate-training windows before live planning; recheck time after setup
+  and before training, and retain detailed timeout, elapsed-time and error-status evidence.
+- Offer untried canonical candidate IDs and bounded rejection feedback to V1; retain legacy specs,
+  fixed search-space validation and the three-invalid-plan limit.
+- Audit bounded custom member collections, cycles and unknown structures conservatively; keep nested
+  CatBoost early-stopping evidence scoped to the helper's fitted model.
+- Add fitted-device reports, internal-monitoring/full-refit CatBoost helpers and V2 GPU availability policy.
+- Keep the incomplete V1/V2 comparison and unknown usage unchanged; no new paid benchmark is included.
+
 ## 0.2.0 — 2026-10-27
 
 - Complete live V1 comparisons: four datasets, three seeds, baseline/random/Agent, 36 completed runs.

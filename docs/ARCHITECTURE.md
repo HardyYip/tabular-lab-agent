@@ -11,6 +11,11 @@ selection → train+validation refit → final test. Ties retain the earlier can
 consume executed trial slots but three consecutive invalid plans end search. All actual LLM responses,
 including malformed JSON, are accounted for before semantic validation.
 
+The planner receives untried `candidate_options` with canonical fingerprint IDs. An ID resolves to the
+executor's registered specification; the model supplies a hypothesis rather than arbitrary parameters.
+Legacy experiment objects remain supported and undergo the same registry/duplicate checks. Rejected
+plans receive bounded error feedback on the next attempt. Exhaustion stops without another API request.
+
 `ExperimentSpec` permits only known algorithms, checked parameter bounds and preprocessing fields.
 The shared finite space supports a meaningful random-vs-LLM comparison. Canonical fingerprints include
 default parameters and exclude hypotheses. No task-name routing is used. Dataset preparation is separate
@@ -32,6 +37,24 @@ Only the Docker worker imports generated source. A candidate defines `build_pipe
 feature_schema)`; the fixed worker calls fit/predict. Validation labels stay on the host and are used
 by the same metric implementation as V1. Immutable image IDs are recorded with each candidate and
 prediction bundle. Generated pickle artifacts never enter host `joblib.load`.
+
+V2 reuses task `device`: `cpu` does not request a GPU, `auto` resolves to GPU or CPU using an isolated
+container `nvidia-smi` probe, and `gpu` requires that probe to succeed before any LLM call. Resolved GPU
+access adds `--gpus=all`; the planner receives this capability but may still choose CPU estimators.
+Training errors remain repair feedback rather than automatic source rewriting. The original requested
+policy remains in `config.json`; manifests and summaries separately record resolved availability.
+Candidate and exported image records preserve the resolved device for refitting and new-process
+prediction. Prediction checks the saved image ID rather than requiring a mutable tag. Legacy image
+records default to CPU. GPU-enabled bundles currently require GPU access even for prediction.
+
+The fixed worker records fitted-model devices and bounded internal-training metadata. The host reads
+only schema-validated JSON, never the generated model. Known CatBoost models report fitted `task_type`;
+unsupported objects are unknown rather than inferred from GPU access. Runtime records feed subsequent
+proposals and are copied from the model actually exported, including the candidate fallback on refit failure.
+CatBoost early stopping uses the supplied helper with an internal, stratified/group-disjoint monitoring
+fold and preprocessing fitted on the internal training fold. It then refits on all current fit data using
+the selected iterations and learning rate. External validation labels never enter this process. Detected
+CatBoost detectors without the helper's training record are rejected; fixed-round training is allowed.
 
 The executor sets the working directory to bounded writable `/tmp` scratch. The root and input mounts
 remain read-only. This supports libraries such as CatBoost that otherwise try to create training logs
@@ -55,6 +78,12 @@ Reservations use conservative input-byte estimates plus a maximum completion all
 is saved per response at configured peak/cache-miss prices. Unknown usage stops all further calls.
 HTTP/transport errors do not automatically retry and are never assumed free. This prioritizes accounting
 integrity over availability. Validly billed but malformed JSON can be retried within the invalid-plan cap.
+
+Live planning requires the full configured HTTP timeout plus one full trial window to remain before the
+search deadline. The finalization reserve is outside that deadline. The HTTP client rechecks after setup;
+the runner rechecks the trial window after receiving a plan. Normal time admission stops do not become
+unknown usage or planning failures. HTTPX phase timeouts are not a strict total request deadline. Timing
+events record fresh availability, configured/effective timeout, elapsed time and available error status.
 
 Reproducibility has two levels: replay the recorded decisions, or rerun live planning. Only the former
 fixes the decision sequence. Record code dirty state, versions, data hashes, seed, device and pricing;

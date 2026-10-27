@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import numpy as np
@@ -5,7 +6,7 @@ import pandas as pd
 import pytest
 from sklearn.datasets import make_classification
 
-from tabular_lab.config import Limits, TaskConfig
+from tabular_lab.config import DockerConfig, Limits, TaskConfig
 
 
 @pytest.fixture(autouse=True)
@@ -34,4 +35,5 @@ def task(tmp_path: Path):
     source = tmp_path / "dataset.csv"
     frame.to_csv(source, index=False)
     return TaskConfig(data_path=source, target="target", id_column="id", run_dir=tmp_path / "runs",
+                      docker=DockerConfig(image=os.environ.get("TABULAR_LAB_TEST_IMAGE", "tabular-lab-worker:0.1.0")),
                       limits=Limits(max_trials=3, max_seconds=120, trial_seconds=30, final_seconds=30))

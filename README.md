@@ -237,8 +237,37 @@ are loaded only inside containers; the host reads checked numeric predictions an
 Container cleanup explicitly removes timed-out containers. This is a local learning boundary, not a
 service hardened to execute adversarial submissions.
 
-V2 defaults to CPU containers and does not require GPU passthrough. Docker is currently an optional
-prerequisite; `docker-check` explains missing setup and V1 remains usable.
+V2 defaults to CPU containers. `--device auto` probes GPU access inside the worker image and enables
+GPU access when available, otherwise using CPU. `--device gpu` requires a successful container GPU
+probe and fails before planning when unavailable. GPU access permits CPU estimators too; generated
+code chooses the estimator's training device. A GPU training error goes back to the repair loop;
+the executor does not rewrite the source to force a CPU retry. Check availability without API calls:
+
+```powershell
+.\.venv\Scripts\python.exe -m tabular_lab docker-check --device gpu
+```
+
+Add `--device auto` to a V2 `run` command to enable this policy. The planner receives GPU availability
+and CPU/memory limits. Candidates and exported bundles record the resolved container device, which
+is restored for finalization and prediction using the immutable image ID. GPU-enabled bundles currently
+require GPU access during prediction; older bundles without a device record retain CPU behavior.
+The container's memory limit controls host RAM, not GPU VRAM. GPU access and actual GPU training are
+different facts; reports record availability without claiming every generated estimator used the GPU.
+Docker is optional for V1; `docker-check` explains missing setup and V1 remains usable.
+See the Chinese [GPU configuration walkthrough](docs/V2_GPU.zh-CN.md) for the module-by-module flow.
+
+The worker now writes bounded, schema-validated fitted-model runtime metadata. It recognizes CatBoost's
+fitted `task_type`, supported sklearn CPU estimators and common pipeline/wrapper/ensemble relationships;
+unsupported estimators are `unknown`. Records enter trial history, planner feedback and exported models.
+GPU availability alone is never treated as observed GPU training, and CPU use alone does not prove fallback.
+
+CatBoost early stopping uses the installed `tabular_lab.early_stopping.EarlyStoppingCatBoost` helper:
+split only the current fit data internally, fit preprocessing on the inner fitting fold, select iterations
+on the inner monitoring fold, then refit preprocessing and the estimator on all current fit data. The
+selected learning rate is preserved and both training stages consume the same trial timeout. Detected
+direct CatBoost overfitting detectors outside this helper are rejected as `UnverifiedEarlyStoppingError`;
+fixed-iteration CatBoost remains supported. Rebuild the worker image after updating these modules.
+See the Chinese [runtime and early-stopping walkthrough](docs/EARLY_STOPPING.zh-CN.md).
 
 ### Verified live V2 runs (2026-10-26–27)
 
@@ -273,6 +302,13 @@ when `docker` is absent from an older terminal's PATH. Reopen PowerShell if you 
 `docker` command directly after installation.
 
 ## Tests and learning
+
+The current working tree adds full-window planning admission, untried canonical V1 candidate IDs with
+rejection feedback, and bounded custom-member runtime audits. See the Chinese
+[implementation walkthrough](docs/ENGINEERING_HARDENING.zh-CN.md) and [validation status](docs/VALIDATION.md).
+The historical counts below describe the 0.2.0 release; they are not the latest working-tree totals.
+The latest local working-tree run passed **103 tests with no skips**: 93 offline and ten actual Docker
+tests, including two GPU cases. This is local verification; check GitHub Actions for the published commit's CI status.
 
 Recorded local Windows verification: **49 passed, 0 skipped** (45 offline tests and four actual Docker
 integration tests). A separate Linux container passed all **45 offline tests**. Docker coverage includes

@@ -39,7 +39,9 @@ def docker_executable() -> str:
     raise RuntimeError("V2 requires Docker Desktop with a Linux engine. Install/start it; V1 needs no Docker.")
 
 
-def preflight(image: str) -> dict:
+def preflight(image: str, device: str = "cpu") -> dict:
+    if device not in {"cpu", "auto", "gpu"}:
+        raise ValueError("device must be cpu, auto or gpu")
     executable = docker_executable()
     try:
         info = subprocess.run([executable, "info", "--format", "{{.OSType}}"],
@@ -51,7 +53,34 @@ def preflight(image: str) -> dict:
     except (subprocess.SubprocessError, OSError) as exc:
         raise RuntimeError("Docker engine/image unavailable. Run: docker build -t " + image +
                            " -f docker/Dockerfile .") from exc
-    return {"engine": "linux", "image": image, "image_id": inspect.stdout.strip()}
+    result = {"engine": "linux", "image": image, "image_id": inspect.stdout.strip(),
+              "requested_device": device, "device": "cpu", "gpu_enabled": False,
+              "gpu_probe": "not_requested", "gpu_devices": []}
+    if device == "cpu":
+        return result
+    name = "tabular-lab-gpu-check-" + uuid.uuid4().hex[:16]
+    command = [executable, "run", "--rm", "--pull=never", "--name", name, "--gpus=all",
+               "--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
+               "--pids-limit=128", "--memory=256m", "--cpus=1", "--user=65534:65534",
+               "--entrypoint=nvidia-smi", result["image_id"], "--query-gpu=name", "--format=csv,noheader"]
+    try:
+        probe = subprocess.run(command, capture_output=True, text=True, timeout=20, check=True)
+        devices = [line.strip() for line in probe.stdout.splitlines() if line.strip()]
+    except (subprocess.SubprocessError, OSError):
+        devices = []
+    finally:
+        try:
+            subprocess.run([executable, "rm", "-f", name], capture_output=True, timeout=10, check=False)
+        except (subprocess.SubprocessError, OSError):
+            pass
+    if devices:
+        result.update(device="gpu", gpu_enabled=True, gpu_probe="available", gpu_devices=devices)
+    else:
+        result["gpu_probe"] = "unavailable"
+        if device == "gpu":
+            raise RuntimeError("V2 GPU requested but the container GPU probe failed. "
+                               "Check Docker GPU access, or select --device cpu/auto.")
+    return result
 
 
 def validate_code(code: str):
@@ -63,6 +92,8 @@ def validate_code(code: str):
 
 def docker_command(task, image_id: str, input_dir: Path, output_dir: Path, name: str,
                    executable: str = "docker"):
+    if task.device == "auto":
+        raise ValueError("resolve auto device with preflight before starting a container")
     return [executable, "run", "--rm", "--name", name, "--network=none", "--read-only",
             "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128",
             "--memory=" + task.docker.memory, "--memory-swap=" + task.docker.memory,
@@ -72,6 +103,7 @@ def docker_command(task, image_id: str, input_dir: Path, output_dir: Path, name:
             "--env=PYTHONDONTWRITEBYTECODE=1", "--env=PYTHONHASHSEED=" + str(task.seed),
             "--mount", f"type=bind,source={input_dir.resolve()},target=/input,readonly",
             "--mount", f"type=bind,source={output_dir.resolve()},target=/output",
+            *(["--gpus=all"] if task.device == "gpu" else []),
             image_id]
 
 
@@ -97,7 +129,25 @@ def _execute(task, folder, timeout, image_id):
     if result["status"] == "ok" and (output_dir / "error.json").exists():
         result = {"status": "failed", "seconds": result["seconds"],
                   "safe_error": read_json(output_dir / "error.json")}
+    if result["status"] == "ok":
+        try:
+            result["runtime"] = _runtime(folder)
+            result["device_used"] = result["runtime"]["device_used"]
+        except (ValueError, OSError) as exc:
+            result.update(status="failed", safe_error={"error_type": type(exc).__name__})
     return result
+
+
+def _runtime(folder):
+    from .runtime import RuntimeReport
+    path = folder / "container-output" / "runtime.json"
+    if path.is_symlink():
+        raise ValueError("runtime metadata must not be a symbolic link")
+    if not path.exists():
+        return RuntimeReport().model_dump()
+    if path.stat().st_size > 128_000:
+        raise ValueError("invalid runtime metadata artifact")
+    return RuntimeReport.model_validate_json(path.read_text(encoding="utf-8")).model_dump()
 
 
 def _inputs(folder, X_train, y_train, X_eval, code, seed, class_count, action="train"):
@@ -143,7 +193,8 @@ def evaluate_code(task, dataset, code, folder, timeout):
     try:
         (folder / "candidate.py").write_text(code, encoding="utf-8")
         validate_code(code)
-        image = preflight(task.docker.image)
+        image = preflight(task.docker.image, task.device)
+        task = task.model_copy(update={"device": image["device"]})
         write_json(folder / "image.json", image)
         _inputs(folder, dataset.train.X, dataset.train.y, dataset.validation.X, code,
                 task.seed, len(dataset.classes))
@@ -165,7 +216,9 @@ def evaluate_code(task, dataset, code, folder, timeout):
 
 def finalize_code(task, dataset, candidate, folder, model_folder, timeout):
     code = (candidate / "container-input" / "candidate.py").read_text(encoding="utf-8")
-    image_id = read_json(candidate / "image.json")["image_id"]
+    image = read_json(candidate / "image.json")
+    image_id = image["image_id"]
+    task = task.model_copy(update={"device": image.get("device", "cpu")})
     _inputs(folder, pd.concat([dataset.train.X, dataset.validation.X], ignore_index=True),
             np.concatenate([dataset.train.y, dataset.validation.y]), dataset.test.X, code,
             task.seed, len(dataset.classes))
@@ -183,7 +236,9 @@ def finalize_code(task, dataset, candidate, folder, model_folder, timeout):
     # Preserve the already-fitted candidate if refitting fails; never load it on the host.
     shutil.copy2(source / "container-output" / "pipeline.joblib", model_folder / "pipeline.joblib")
     (model_folder / "candidate.py").write_text(code, encoding="utf-8")
-    write_json(model_folder / "image.json", {"image_id": image_id, "image": task.docker.image})
+    write_json(model_folder / "runtime.json", _runtime(source))
+    write_json(model_folder / "image.json", {"image_id": image_id, "image": task.docker.image,
+                                            "device": task.device})
     if result["status"] == "ok":
         result["metrics"] = metrics
         np.savez(folder / "predictions.npz", predictions=predictions, probabilities=probabilities)
@@ -192,8 +247,10 @@ def finalize_code(task, dataset, candidate, folder, model_folder, timeout):
 
 def predict_code(model, frame, metadata):
     from .config import TaskConfig
-    preflight(metadata["docker_image"])
-    image_id = read_json(model / "image.json")["image_id"]
+    image = read_json(model / "image.json")
+    image_id = image["image_id"]
+    device = image.get("device", "cpu")
+    preflight(image_id, device)
     # Use a local temporary workspace; no mounts of user data directories or API credentials.
     with tempfile.TemporaryDirectory(prefix="tabular-lab-predict-") as temporary:
         folder = Path(temporary)
@@ -205,7 +262,8 @@ def predict_code(model, frame, metadata):
         write_json(inputs / "request.json", {"action": "predict", "seed": metadata["seed"],
                    "class_count": len(metadata["classes"]),
                    "feature_schema": metadata.get("feature_schema", {})})
-        task = TaskConfig(data_path=Path("unused"), target=metadata["target"], seed=metadata["seed"])
+        task = TaskConfig(data_path=Path("unused"), target=metadata["target"], seed=metadata["seed"],
+                          device=device)
         result = _execute(task, folder, 120, image_id)
         if result["status"] != "ok":
             raise RuntimeError("container prediction failed: " + str(result.get("safe_error", result["status"])))

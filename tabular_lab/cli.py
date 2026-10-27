@@ -125,11 +125,12 @@ def publish_example(run: Annotated[Path, typer.Option(exists=True)],
 
 
 @app.command()
-def docker_check(image: Annotated[str, typer.Option()] = "tabular-lab-worker:0.1.0"):
+def docker_check(image: Annotated[str, typer.Option()] = "tabular-lab-worker:0.1.0",
+                 device: Annotated[str, typer.Option()] = "cpu"):
     """Validate V2 prerequisites without disabling V1."""
     from .sandbox import preflight
     try:
-        typer.echo(json.dumps(preflight(image), indent=2))
-    except RuntimeError as exc:
+        typer.echo(json.dumps(preflight(image, device), indent=2))
+    except (RuntimeError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc

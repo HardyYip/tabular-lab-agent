@@ -20,3 +20,5 @@ htmlcov/
 /DSH_HANDOFF.md
 /DSH_RETURN.md
 /test-results/
+/agent.md
+/scripts/repair_docker_runtime.ps1

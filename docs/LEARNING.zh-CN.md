@@ -40,6 +40,11 @@ Windows 使用 `python -m tabular_lab auth login` 首次保存密钥，以后自
 固定方案、数据和 CPU 环境能较好复现；重新调用 LLM 不保证同样的决策；GPU 也可能有数值差异。
 复现时先核对 manifest，而不是只看一个 seed。
 
+请求超时时，先分清调用方给出的剩余时间、实际 HTTP timeout 和测得的耗时。
+阅读 [请求计时与离线复现](REQUEST_TIMING.zh-CN.md)，沿 `runner.run_task()` → `JSONClient.ask()`
+查看时间如何传递，再运行对应离线测试。模拟异常能验证控制流，历史失败的根因仍需要当时的证据。
+后续三项改进的完整导读见 [截止控制、候选反馈与集成审计](ENGINEERING_HARDENING.zh-CN.md)。
+
 ## 第四步：判断 Agent 是否有效
 
 正式表格任务使用 Wine Quality 和 Adult，sklearn 小数据主要用于快速回归测试。

@@ -24,7 +24,7 @@ include = ["tabular_lab*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["docker: requires a running Docker Linux engine and the lab image", "live: consumes a configured model API"]
+markers = ["docker: requires a running Docker Linux engine and the lab image", "live: consumes a configured model API", "gpu: opt-in local Docker GPU integration"]
 
 [tool.ruff]
 line-length = 110

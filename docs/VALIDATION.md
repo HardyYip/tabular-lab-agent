@@ -1,5 +1,35 @@
 # Validation status (2026-10-27)
 
+## Latest local working tree (unreleased)
+
+The final local suite passed **103 tests, 0 skipped** in 262.43 seconds: 93 offline tests and ten actual
+Docker tests, including two opt-in GPU cases. HTTP planning tests use MockTransport/replay and isolated
+credentials; no new paid API request or benchmark run was made. `ruff check .` and `git diff --check` pass.
+This is local Windows verification, not a new remote CI result or release.
+
+Coverage includes full request/trial-window admission, fresh deadline checks after setup, late-response
+training stops, canonical V1 candidate IDs and rejection recovery, bounded custom member/cycle audits,
+nested early-stopping rejection, actual container final refitting and exported prediction equivalence.
+See the [implementation walkthrough](ENGINEERING_HARDENING.zh-CN.md).
+
+The final worker ID is `sha256:1853dab9dfce2c1d98d5d8bef186927bc4ae59e1ad2dc433253ab8e6d76d39f5`.
+Both `tabular-lab-worker:engineering-20261027` and the local default `tabular-lab-worker:0.1.0` resolve to it.
+The comparison worker `sha256:5b140f7aff310bcb462b073352f53506207b0d644436d98ad6c5a68e2bbeaf4e` remains
+available under `tabular-lab-worker:comparison-20261027`; historical exports still reference that immutable ID.
+The new package-source SHA-256 is `a1795f2e32df27ac4dec135b0a7f5ed631cdb3e05bdf1583b5f186f910f4407a`.
+
+Local machine-readable evidence is stored in the ignored `runs/engineering-hardening-20261027/validation.json`
+and `pytest-final.xml`. The earlier pass is retained separately in `pytest.xml`; its count must not be added
+to the final total. An initial network-disabled image build lacked the dependency-layer cache and failed;
+the standard Docker build succeeded using cached dependencies before final container verification.
+
+The incomplete Wine Quality comparison remains two partial runs with one unknown API usage. Its frozen
+protocol, result ledger and audit were not rewritten. The current source cannot be treated as that protocol.
+Live planning still uses HTTPX phase timeouts rather than a strict total HTTP deadline; supported runtime
+traversal cannot prove complete coverage of arbitrary generated Python wrappers.
+
+## v0.2.0 release evidence
+
 Validated locally on Windows, Python 3.11.16, RTX 5070 Laptop GPU (~8 GB VRAM), ~32 GB RAM.
 
 - Offline end-to-end demo: five candidates, successful final model export and prediction.

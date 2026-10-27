@@ -13,11 +13,12 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
+from pydantic import ValidationError
 
 from .config import ExperimentSpec, TaskConfig
 from .data import load_dataset, prediction_frame
 from .io import append_event, code_version, read_json, write_json
-from .llm import CodePlan, JSONClient, Plan, StopRun, code_prompt, planning_prompt
+from .llm import CodePlan, JSONClient, Plan, PlanningTimeLimit, StopRun, code_prompt, planning_prompt
 from .process import run_worker
 from .search import allowed_fingerprints, baselines, choose_mock, choose_random, search_space
 
@@ -49,23 +50,29 @@ def _trial(task, dataset, spec, folder, timeout, final=False, fitted_model=None)
 def _context(dataset, history, task):
     # No dataset names, file paths, raw rows, test summaries or target labels sent to LLM.
     return {"training_profile": dataset.profile, "metric": task.metric,
-            "history": [{k: h[k] for k in ("trial", "spec", "status", "metrics", "fingerprint", "error_type")
+            "history": [{k: h[k] for k in ("trial", "spec", "status", "metrics", "fingerprint", "error_type",
+                                           "runtime", "device_used")
                          if k in h} for h in history],
-            "candidate_space": [s.model_dump() for s in search_space()]}
+            "candidate_space": [s.model_dump() for s in search_space()
+                                if s.fingerprint() not in {h["fingerprint"] for h in history}]}
 
 
 def run_task(task: TaskConfig, output: Path | None = None) -> dict:
+    requested_task = task
+    execution_environment = None
     if task.strategy == "codegen":
         from .sandbox import preflight
-        preflight(task.docker.image)
+        execution_environment = preflight(task.docker.image, task.device)
+        task = task.model_copy(update={"device": execution_environment["device"]})
     start = time.monotonic()
     deadline = start + task.limits.max_seconds
+    search_deadline = deadline - min(task.limits.final_seconds, task.limits.max_seconds / 3)
     dataset = load_dataset(task)
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     folder = output or task.run_dir / run_id
     folder.mkdir(parents=True, exist_ok=False)
     log = folder / "events.jsonl"
-    write_json(folder / "config.json", task.model_dump(mode="json"))
+    write_json(folder / "config.json", requested_task.model_dump(mode="json"))
     write_json(folder / "profile.json", dataset.profile)
     write_json(folder / "splits.json", {name: getattr(dataset, name).indices
                                         for name in ("train", "validation", "test")})
@@ -75,6 +82,7 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
                "data_hashes": dataset.hashes, "seed": task.seed,
                "split_source": dataset.split_source,
                "provider": task.llm.provider, "model": task.llm.model,
+               "execution_environment": execution_environment,
                "pricing": task.llm.pricing.model_dump()})
     llm = JSONClient(task.llm, task.limits.budget_cny, log) if task.llm.provider != "mock" else None
     history, best = [], None
@@ -83,10 +91,9 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
     pending_code = None
     repair_count = 0
     planning_failed = False
+    planning_feedback = []
     while len(history) < task.limits.max_trials:
-        remaining = deadline - time.monotonic()
-        # Reserve finalization time rather than spend the entire run on search.
-        available = remaining - min(task.limits.final_seconds, task.limits.max_seconds / 3)
+        available = search_deadline - time.monotonic()
         if available <= 1:
             stop_reason = "search_time_limit"
             break
@@ -106,7 +113,10 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
                 context.pop("candidate_space")
                 context["feature_schema"] = {c: str(dataset.train.X[c].dtype) for c in dataset.columns}
                 context["execution_limits"] = {"trial_seconds": task.limits.trial_seconds,
-                                                "cpus": task.docker.cpus, "memory": task.docker.memory}
+                                                "cpus": task.docker.cpus, "memory": task.docker.memory,
+                                                "device": task.device,
+                                                "gpu_enabled": execution_environment["gpu_enabled"],
+                                                "gpu_devices": execution_environment["gpu_devices"]}
                 successful_code = [h for h in history if h["spec"]["model"] == "generated" and h["status"] == "ok"]
                 if successful_code:
                     previous = max(successful_code, key=lambda h: h["metrics"][task.metric])
@@ -116,7 +126,8 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
                                                  "metrics": previous["metrics"]}
                 if pending_code:
                     context["repair"] = pending_code
-                decision = CodePlan.model_validate(llm.ask(code_prompt(), context, timeout=available))
+                decision = CodePlan.model_validate(llm.ask(code_prompt(), context, deadline=search_deadline,
+                                                           reserve_seconds=task.limits.trial_seconds))
                 if decision.action == "stop":
                     stop_reason = "agent_stop: " + decision.reason
                     break
@@ -125,12 +136,31 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
                 code = decision.code
                 spec = {"model": "generated", "hypothesis": decision.hypothesis}
             else:
-                decision = Plan.model_validate(llm.ask(planning_prompt(), _context(dataset, history, task),
-                                                       timeout=available))
+                context = _context(dataset, history, task)
+                options = {s.fingerprint(): s for s in search_space()
+                           if s.fingerprint() not in {h["fingerprint"] for h in history}}
+                if not options:
+                    stop_reason = "search_space_exhausted"
+                    break
+                context["candidate_options"] = [{"candidate_id": key, "experiment": spec.model_dump()}
+                                                for key, spec in options.items()]
+                context.pop("candidate_space")
+                context["planning_feedback"] = planning_feedback[-3:]
+                decision = Plan.model_validate(llm.ask(planning_prompt(), context, deadline=search_deadline,
+                                                       reserve_seconds=task.limits.trial_seconds))
                 if decision.action == "stop":
                     stop_reason = "agent_stop: " + decision.reason
                     break
-                spec = decision.experiment
+                if decision.candidate_id is not None:
+                    if decision.experiment is not None:
+                        raise ValueError("choose candidate_id or experiment, not both")
+                    if decision.candidate_id not in options:
+                        raise ValueError("candidate_id is not an offered untried option")
+                    if not decision.hypothesis.strip():
+                        raise ValueError("candidate choice requires a hypothesis")
+                    spec = options[decision.candidate_id].model_copy(update={"hypothesis": decision.hypothesis})
+                else:
+                    spec = decision.experiment
                 if spec is None:
                     raise ValueError("experiment action requires experiment")
                 if spec.fingerprint() not in allowed_fingerprints():
@@ -141,6 +171,9 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
             fingerprint = hashlib.sha256(code.encode()).hexdigest() if code else spec.fingerprint()
             if fingerprint in {h["fingerprint"] for h in history}:
                 raise ValueError("duplicate experiment")
+        except PlanningTimeLimit as exc:
+            stop_reason = str(exc)
+            break
         except StopRun as exc:
             planning_failed = True
             stop_reason = str(exc)
@@ -148,6 +181,8 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
             break
         except ValueError as exc:
             no_progress += 1
+            reason = "plan schema validation failed" if isinstance(exc, ValidationError) else str(exc)[:500]
+            planning_feedback.append({"attempt": no_progress, "error": reason})
             append_event(log, {"event": "invalid_plan", "error": str(exc)[:1000]})
             if no_progress >= 3:
                 planning_failed = True
@@ -155,17 +190,20 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
                 break
             continue
         no_progress = 0
+        planning_feedback.clear()
         trial_id = len(history)
         trial_folder = folder / "trials" / f"{trial_id:03d}"
         spec_dict = spec if code else spec.model_dump()
+        # Account for planning latency before launching a bounded experiment.
+        timeout = min(task.limits.trial_seconds, search_deadline - time.monotonic())
+        if timeout <= 0 or (llm and task.strategy in {"agent", "codegen"}
+                           and timeout < task.limits.trial_seconds):
+            stop_reason = "search_time_limit"
+            append_event(log, {"event": "trial_time_stop", "available_seconds": search_deadline - time.monotonic(),
+                               "required_seconds": task.limits.trial_seconds})
+            break
         append_event(log, {"event": "experiment_start", "trial": trial_id, "spec": spec_dict,
                            "fingerprint": fingerprint})
-        # Account for planning latency before launching a bounded experiment.
-        timeout = min(task.limits.trial_seconds, deadline - time.monotonic() -
-                      min(task.limits.final_seconds, task.limits.max_seconds / 3))
-        if timeout <= 0:
-            stop_reason = "search_time_limit"
-            break
         if code:
             from .sandbox import evaluate_code
             result = evaluate_code(task, dataset, code, trial_folder, timeout)
@@ -195,6 +233,7 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
                "usage_unknown": llm.usage_unknown if llm else False,
                "best_trial": best["trial"] if best else None,
                "best_validation": best["metrics"] if best else None,
+               "execution_environment": execution_environment,
                "status": "no_model" if best is None else "partial" if planning_failed else "completed"}
     if best is not None:
         model_folder = folder / "model"
@@ -221,6 +260,8 @@ def run_task(task: TaskConfig, output: Path | None = None) -> dict:
                     "target": task.target, "id_column": task.id_column, "seed": task.seed,
                     "spec": best["spec"], "refit_on_train_validation": final["status"] == "ok",
                     "docker_image": task.docker.image if backend == "docker" else None}
+        if backend == "docker":
+            metadata["runtime"] = read_json(model_folder / "runtime.json")
         write_json(model_folder / "metadata.json", metadata)
         summary["finalization"] = final
         if final["status"] == "ok":
@@ -265,22 +306,29 @@ def predict(model: Path, input_path: Path, output: Path):
 
 def _report(folder, summary, history):
     devices = sorted({h["device_used"] for h in history if h.get("device_used")})
-    execution = ("Generated pipelines in CPU Docker containers" if summary["strategy"] == "codegen" else
+    environment = summary.get("execution_environment") or {}
+    access = "GPU access enabled" if environment.get("gpu_enabled") else "CPU only"
+    execution = (("Generated pipelines in Docker containers (" + access +
+                  "; actual estimator device depends on generated code)") if summary["strategy"] == "codegen" else
                  "Finite search space; observed training devices: " + (", ".join(devices) or "not recorded"))
     lines = ["# Tabular Lab experiment report", "", f"Strategy: **{summary['strategy']}**; "
              f"provider: **{summary['provider']}**. Mock/replay results are not live LLM results.", "",
              f"Status: {summary['status']}; stop reason: {summary['stop_reason']}", "",
              f"Estimated model cost: CNY {summary['cost_cny_estimate']:.6f}; "
              f"calls: {summary['llm_calls']}; unknown usage: {summary['usage_unknown']}", "",
-             "| Trial | Model | Status | Validation macro-F1 | Seconds |",
-             "| --- | --- | --- | ---: | ---: |"]
+             "| Trial | Model | Status | Device used | Validation macro-F1 | Seconds |",
+             "| --- | --- | --- | --- | ---: | ---: |"]
     for h in history:
         score = h.get("metrics", {}).get("macro_f1")
-        lines.append(f"| {h['trial']} | {h['spec']['model']} | {h['status']} | "
+        lines.append(f"| {h['trial']} | {h['spec']['model']} | {h['status']} | {h.get('device_used', 'unknown')} | "
                      f"{score if score is not None else '—'} | {h['seconds']:.2f} |")
     lines.extend(["", "## Decisions", ""])
     for h in history:
         lines.append(f"- Trial {h['trial']}: {h['spec']['hypothesis']}")
+        for early in h.get("runtime", {}).get("early_stopping", []):
+            lines.append(f"  - Internal monitoring: {early['fit_rows']} fit / {early['monitor_rows']} monitor; "
+                         f"attempted {early['selection_iterations_run']} rounds, selected "
+                         f"{early['selected_iterations']}; refitted all {early['refit_rows']} rows.")
     lines.extend(["", "## Final test (not used for selection)", "", "```json",
                   json.dumps(summary.get("test_metrics", {}), indent=2), "```", "",
                   "## Limitations", "", execution + "; one validation split per run. "
